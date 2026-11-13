@@ -13,7 +13,7 @@ Schülerpraktika finden (Klasse 8–10) – Karte, Umkreis, echte Angebote der B
 
 | Dienst | Key? | Woher |
 |--------|------|--------|
-| Karte (Leaflet + OSM/CARTO) | Nein | schon eingebaut |
+| Karte (CARTO Voyager Tiles) | Ja | `NEXT_PUBLIC_CARTO_API_KEY` |
 | Adresssuche (Nominatim) | Nein | nur User-Agent in `.env.local` |
 | Praktika (BA Jobsuche) | Nein | öffentliche Client-ID `jobboerse-jobsuche` |
 | OSM-Betriebe (Overpass) | Nein | optional, kann langsam sein |
@@ -21,9 +21,10 @@ Schülerpraktika finden (Klasse 8–10) – Karte, Umkreis, echte Angebote der B
 
 ```bash
 cp .env.example .env.local
-# GEO_USER_AGENT + Supabase URL/Anon-Key eintragen
+# CARTO-, Supabase- und GEO_USER_AGENT-Werte eintragen
 npm install && npm run dev
 ```
+
 
 ## Nutzung ohne Lebenslauf
 
