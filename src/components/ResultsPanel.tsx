@@ -13,6 +13,8 @@ interface ResultsPanelProps {
     baCount: number;
     osmCount: number;
     osmError: string | null;
+    baError?: string | null;
+    searchPlace?: string;
     disclaimer: string;
   } | null;
   error: string | null;
@@ -64,15 +66,18 @@ export function ResultsPanel({
       </h2>
       <p className="mt-2 text-[15px] text-neutral-500">
         {meta
-          ? `${meta.baCount} Angebote der Arbeitsagentur${
-              meta.osmCount > 0 ? ` · ${meta.osmCount} Initiativ` : ""
-            }`
+          ? `${meta.baCount} offene Stellen${
+              meta.osmCount > 0
+                ? ` · ${meta.osmCount} Betriebe ohne Anzeige`
+                : ""
+            }${meta.searchPlace ? ` · Suche: ${meta.searchPlace}` : ""}`
           : "Noch keine Suche gestartet."}
       </p>
 
       {meta && (
         <p className="mt-3 text-[12px] text-neutral-400">
           {meta.disclaimer}
+          {meta.baError ? ` · BA: ${meta.baError}` : ""}
           {meta.osmError ? ` · OSM: ${meta.osmError}` : ""}
         </p>
       )}
@@ -132,9 +137,9 @@ export function ResultsPanel({
             }
             className="border-0 border-b border-neutral-200 bg-transparent py-1.5 text-[14px] outline-none focus:border-neutral-950"
           >
-            <option value="alle">Alle</option>
-            <option value="ba">Nur BA</option>
-            <option value="osm">Nur Initiativ</option>
+            <option value="alle">Alle (Stellen + Betriebe)</option>
+            <option value="ba">Nur offene Stellen (BA)</option>
+            <option value="osm">Nur Betriebe ohne Anzeige</option>
           </select>
         </label>
       </div>

@@ -18,8 +18,10 @@ interface OsmElement {
 }
 
 const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
+  "https://lz4.overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.osm.ch/api/interpreter",
 ];
 
 function userAgent(): string {
@@ -29,33 +31,21 @@ function userAgent(): string {
   );
 }
 
-function buildQuery(
-  lat: number,
-  lon: number,
-  radiusM: number,
-  fields: CareerFieldId[],
-): string {
-  const selected = fields.length
-    ? CAREER_FIELDS.filter((f) => fields.includes(f.id))
-    : CAREER_FIELDS.slice(0, 4);
-
-  const filters: string[] = [];
-  for (const field of selected) {
-    for (const tag of field.osmTags.slice(0, 1)) {
-      // Nur Nodes – deutlich schneller als nwr
-      filters.push(`node[${tag}](around:${radiusM},${lat},${lon});`);
-    }
-  }
-  filters.push(`node["office"="company"](around:${radiusM},${lat},${lon});`);
-  filters.push(`node["craft"](around:${Math.min(radiusM, 8000)},${lat},${lon});`);
-
-  return `
-[out:json][timeout:15];
-(
-${Array.from(new Set(filters)).join("\n")}
-);
-out body 30;
-`.trim();
+/** Mehrere kleine Queries – robuster als eine große. */
+function buildQueries(lat: number, lon: number, radiusM: number): string[] {
+  const r = Math.min(Math.max(radiusM, 3000), 15000);
+  return [
+    `[out:json][timeout:12];node["office"](around:${r},${lat},${lon});out body 50;`,
+    `[out:json][timeout:12];node["craft"](around:${r},${lat},${lon});out body 40;`,
+    `[out:json][timeout:12];(
+  node["amenity"="hospital"](around:${r},${lat},${lon});
+  node["amenity"="clinic"](around:${r},${lat},${lon});
+  node["amenity"="school"](around:${r},${lat},${lon});
+  node["amenity"="kindergarten"](around:${r},${lat},${lon});
+  node["shop"="car_repair"](around:${r},${lat},${lon});
+  node["shop"="car"](around:${r},${lat},${lon});
+);out body 40;`,
+  ];
 }
 
 function osmName(tags: Record<string, string>): string {
@@ -96,39 +86,54 @@ function fieldHintsFromTags(
   return hints;
 }
 
-async function fetchOverpass(query: string): Promise<OsmElement[]> {
-  let lastError: Error | null = null;
-
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 18000);
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent": userAgent(),
-          Accept: "application/json",
-        },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: controller.signal,
-        next: { revalidate: 0 },
-      });
-      if (!res.ok) {
-        lastError = new Error(`Overpass HTTP ${res.status} (${endpoint})`);
-        continue;
-      }
-      const data = (await res.json()) as { elements?: OsmElement[] };
-      return data.elements ?? [];
-    } catch (err) {
-      lastError =
-        err instanceof Error ? err : new Error("Overpass-Anfrage fehlgeschlagen");
-    } finally {
-      clearTimeout(timer);
-    }
+async function fetchOneEndpoint(
+  endpoint: string,
+  query: string,
+  timeoutMs: number,
+): Promise<OsmElement[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "User-Agent": userAgent(),
+        Accept: "application/json",
+      },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: controller.signal,
+      next: { revalidate: 0 },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as { elements?: OsmElement[] };
+    return data.elements ?? [];
+  } finally {
+    clearTimeout(timer);
   }
+}
 
-  throw lastError ?? new Error("OpenStreetMap/Overpass nicht erreichbar.");
+async function fetchOverpass(query: string): Promise<OsmElement[]> {
+  // Endpunkte parallel anfragen – erster Erfolg gewinnt
+  const errors: string[] = [];
+  const tasks = OVERPASS_ENDPOINTS.map(async (endpoint) => {
+    try {
+      return await fetchOneEndpoint(endpoint, query, 10000);
+    } catch (err) {
+      errors.push(
+        `${endpoint}: ${err instanceof Error ? err.message : "fail"}`,
+      );
+      throw err;
+    }
+  });
+
+  try {
+    return await Promise.any(tasks);
+  } catch {
+    throw new Error(
+      errors[0] || "OpenStreetMap/Overpass nicht erreichbar.",
+    );
+  }
 }
 
 export async function searchOsmCompanies(params: {
@@ -140,14 +145,29 @@ export async function searchOsmCompanies(params: {
 }): Promise<InternshipOffer[]> {
   const { center, radiusKm, selectedFields, profile, existingCompanyKeys } =
     params;
-  // OSM-Umkreis begrenzen, damit die Abfrage schnell bleibt
-  const effectiveKm = Math.min(radiusKm, 20);
-  const radiusM = Math.round(effectiveKm * 1000);
-  const query = buildQuery(center.lat, center.lon, radiusM, selectedFields);
-  const elements = await fetchOverpass(query);
+  const radiusM = Math.round(Math.min(Math.max(radiusKm, 5), 20) * 1000);
+  const queries = buildQueries(center.lat, center.lon, radiusM);
+
+  const batches = await Promise.all(
+    queries.map(async (q) => {
+      try {
+        return await fetchOverpass(q);
+      } catch {
+        return [] as OsmElement[];
+      }
+    }),
+  );
+
+  const elements = batches.flat();
   const offers: InternshipOffer[] = [];
+  const seen = new Set<string>(existingCompanyKeys);
+  const seenIds = new Set<string>();
 
   for (const el of elements) {
+    const idKey = `${el.type}-${el.id}`;
+    if (seenIds.has(idKey)) continue;
+    seenIds.add(idKey);
+
     const tags = el.tags || {};
     if (!tags.name && !tags.brand) continue;
     const lat = el.lat ?? el.center?.lat;
@@ -156,25 +176,33 @@ export async function searchOsmCompanies(params: {
 
     const company = osmName(tags);
     const key = company.toLowerCase().replace(/\s+/g, " ").trim();
-    if (existingCompanyKeys.has(key)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
 
     const distanceKm = haversineKm(center.lat, center.lon, lat, lon);
-    if (distanceKm > radiusKm) continue;
+    if (distanceKm > radiusKm + 0.5) continue;
 
     const fieldHints = fieldHintsFromTags(tags, selectedFields);
-    const title = `Initiativpraktikum möglich: ${company}`;
+    const title = `Initiativbewerbung: ${company}`;
     const description =
-      `Betrieb aus OpenStreetMap (${
+      `Betrieb in der Nähe (OpenStreetMap). ` +
+      `Kein ausgeschriebenes Praktikumsangebot – Initiativbewerbung möglich. ` +
+      `Tags: ${
         Object.entries(tags)
           .filter(([k]) =>
-            ["office", "craft", "amenity", "shop", "tourism", "industrial"].includes(
-              k,
-            ),
+            [
+              "office",
+              "craft",
+              "amenity",
+              "shop",
+              "tourism",
+              "industrial",
+              "aeroway",
+            ].includes(k),
           )
           .map(([k, v]) => `${k}=${v}`)
-          .join(", ") || "ohne Detail-Tags"
-      }). ` +
-      "Kein ausgeschriebenes Praktikumsangebot – Initiativbewerbung möglich.";
+          .join(", ") || "Betrieb"
+      }.`;
 
     const score = scoreOffer({
       title,
@@ -207,7 +235,7 @@ export async function searchOsmCompanies(params: {
       travel: estimateTravel(distanceKm),
     });
 
-    if (offers.length >= 20) break;
+    if (offers.length >= 80) break;
   }
 
   return offers;

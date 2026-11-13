@@ -35,7 +35,7 @@ export function AppShell() {
   const [fields, setFields] = useState<CareerFieldId[]>([]);
   const [center, setCenter] = useState<MapCenter>(DEFAULT_CENTER);
   const [radiusKm, setRadiusKm] = useState(15);
-  const [includeOsm, setIncludeOsm] = useState(false);
+  const [includeOsm, setIncludeOsm] = useState(true);
   const [offers, setOffers] = useState<InternshipOffer[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
@@ -44,6 +44,8 @@ export function AppShell() {
     baCount: number;
     osmCount: number;
     osmError: string | null;
+    baError?: string | null;
+    searchPlace?: string;
     disclaimer: string;
   } | null>(null);
   const [merklisteOpen, setMerklisteOpen] = useState(false);
@@ -82,6 +84,7 @@ export function AppShell() {
     setSearching(true);
     setSearchError(null);
     try {
+      // 1) Offene Stellen zuerst (schnell)
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,20 +93,58 @@ export function AppShell() {
           radiusKm,
           fields: selectedFields,
           profile: activeProfile,
-          includeOsm,
+          includeOsm: false,
           enrichDescriptions: false,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Suche fehlgeschlagen");
-      setOffers(data.offers || []);
+      const baOffers = (data.offers || []) as InternshipOffer[];
+      setOffers(baOffers);
       setMeta(data.meta || null);
-      setSelectedId(data.offers?.[0]?.id ?? null);
+      setSelectedId(baOffers[0]?.id ?? null);
+      setSearching(false);
+
+      // 2) Betriebe ohne Anzeige nachladen (wenn aktiviert)
+      if (!includeOsm) return;
+
+      const companyRes = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          center,
+          radiusKm,
+          fields: selectedFields,
+          profile: activeProfile,
+          excludeCompanies: baOffers.map((o) => o.company),
+        }),
+      });
+      const companyData = await companyRes.json();
+      const osmOffers = (companyData.offers || []) as InternshipOffer[];
+      if (osmOffers.length > 0) {
+        setOffers((prev) => {
+          const ids = new Set(prev.map((p) => p.id));
+          return [...prev, ...osmOffers.filter((o) => !ids.has(o.id))];
+        });
+      }
+      setMeta((prev) =>
+        prev
+          ? {
+              ...prev,
+              osmCount: osmOffers.length,
+              osmError: companyData.error || null,
+              disclaimer:
+                "Offene Stellen: Bundesagentur für Arbeit. Weitere Betriebe: OpenStreetMap (Initiativbewerbung).",
+            }
+          : prev,
+      );
+      if (!baOffers.length && osmOffers[0]) {
+        setSelectedId(osmOffers[0].id);
+      }
     } catch (err) {
       setSearchError(
         err instanceof Error ? err.message : "Suche fehlgeschlagen",
       );
-    } finally {
       setSearching(false);
     }
   }

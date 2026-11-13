@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { searchBaInternships, fetchBaJobDetails } from "@/lib/ba-api";
 import { fieldSearchTerms } from "@/lib/fields";
 import { searchOsmCompanies } from "@/lib/overpass";
+import { resolveBaPlace } from "@/lib/place";
 import { sortOffers } from "@/lib/scoring";
 import type { CareerFieldId, MapCenter, StudentProfile } from "@/lib/types";
 
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
     const { center, profile } = body;
     const radiusKm = Math.min(50, Math.max(1, Number(body.radiusKm) || 10));
     const fields = Array.isArray(body.fields) ? body.fields : [];
+    // Standard: auch Betriebe ohne offene Stelle laden
     const includeOsm = body.includeOsm !== false;
 
     if (
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
     }
 
     const searchTerms = fieldSearchTerms(fields);
+    const searchPlace = await resolveBaPlace(center);
 
     const baPromise = searchBaInternships({
       center,
@@ -56,8 +59,16 @@ export async function POST(request: Request) {
           error: null as string | null,
         });
 
-    const [baOffers, osmResult] = await Promise.all([
-      baPromise,
+    const [baResult, osmResult] = await Promise.all([
+      baPromise.then((offers) => ({ offers, error: null as string | null })).catch(
+        (err: unknown) => ({
+          offers: [] as Awaited<ReturnType<typeof searchBaInternships>>,
+          error:
+            err instanceof Error
+              ? err.message
+              : "BA-Jobsuche fehlgeschlagen.",
+        }),
+      ),
       osmPromise.catch((err: unknown) => ({
         offers: [] as Awaited<ReturnType<typeof searchOsmCompanies>>,
         error:
@@ -67,7 +78,8 @@ export async function POST(request: Request) {
       })),
     ]);
 
-    // Optional: kurze Beschreibung nachladen (begrenzt, um die API zu schonen)
+    const baOffers = baResult.offers;
+
     if (body.enrichDescriptions) {
       const top = baOffers.slice(0, 8);
       await Promise.all(
@@ -83,20 +95,37 @@ export async function POST(request: Request) {
       baOffers.map((o) => o.company.toLowerCase().replace(/\s+/g, " ").trim()),
     );
     const osmOffers = osmResult.offers.filter(
-      (o) => !baCompanyKeys.has(o.company.toLowerCase().replace(/\s+/g, " ").trim()),
+      (o) =>
+        !baCompanyKeys.has(o.company.toLowerCase().replace(/\s+/g, " ").trim()),
     );
-    const osmError = osmResult.error;
 
-    const offers = sortOffers([...baOffers, ...osmOffers], "match");
+    const offers = sortOffers([...baOffers, ...osmOffers], "distance");
+
+    if (offers.length === 0) {
+      return NextResponse.json({
+        offers: [],
+        meta: {
+          baCount: 0,
+          osmCount: 0,
+          osmError: osmResult.error,
+          baError: baResult.error,
+          searchPlace,
+          disclaimer:
+            "Keine Treffer im Umkreis. Radius vergrößern oder anderen Ort wählen. Betriebe ohne Anzeige brauchen die Option „Alle Betriebe“.",
+        },
+      });
+    }
 
     return NextResponse.json({
       offers,
       meta: {
         baCount: baOffers.length,
         osmCount: osmOffers.length,
-        osmError,
+        osmError: osmResult.error,
+        baError: baResult.error,
+        searchPlace,
         disclaimer:
-          "Passung, Schwierigkeit und Fahrzeiten sind automatische Schätzungen – keine Garantie.",
+          "Offene Stellen: Bundesagentur für Arbeit. Weitere Betriebe: OpenStreetMap (Initiativbewerbung). Bewertungen sind Schätzungen.",
       },
     });
   } catch (error) {
