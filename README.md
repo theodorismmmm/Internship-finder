@@ -2,22 +2,29 @@
 
 Schülerpraktika finden (Klasse 8–10) – Karte, Umkreis, echte Angebote der Bundesagentur für Arbeit.
 
+## Hosting
+
+- **Vercel:** https://internship-finder-sigma-two.vercel.app  
+- **Supabase:** Projekt `praktikumsradar` (EU), Tabelle `favorites` für optionale Merkliste-Sync
+
 ## Brauche ich API-Keys?
 
 **Nein – keine Google Maps / Mapbox Keys.**
 
 | Dienst | Key? | Woher |
 |--------|------|--------|
-| Karte (Leaflet + OSM/CARTO) | Nein | schon eingebaut |
+| Karte (CARTO Voyager Tiles) | Ja | `NEXT_PUBLIC_CARTO_API_KEY` |
 | Adresssuche (Nominatim) | Nein | nur User-Agent in `.env.local` |
 | Praktika (BA Jobsuche) | Nein | öffentliche Client-ID `jobboerse-jobsuche` |
 | OSM-Betriebe (Overpass) | Nein | optional, kann langsam sein |
+| Supabase | Ja (kostenlos) | Project Settings → API |
 
 ```bash
 cp .env.example .env.local
-# GEO_USER_AGENT mit deiner Mail anpassen – fertig
+# CARTO-, Supabase- und GEO_USER_AGENT-Werte eintragen
 npm install && npm run dev
 ```
+
 
 ## Nutzung ohne Lebenslauf
 

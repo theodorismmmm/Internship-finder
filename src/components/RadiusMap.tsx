@@ -76,6 +76,15 @@ interface RadiusMapProps {
   onSelectOffer: (id: string) => void;
 }
 
+function cartoTileUrl(): string {
+  const key = process.env.NEXT_PUBLIC_CARTO_API_KEY?.trim();
+  if (key) {
+    return `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${encodeURIComponent(key)}`;
+  }
+  // Fallback ohne Key (free tier / light)
+  return "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+}
+
 export default function RadiusMap({
   center,
   radiusKm,
@@ -85,6 +94,7 @@ export default function RadiusMap({
   onSelectOffer,
 }: RadiusMapProps) {
   const markers = useMemo(() => offers, [offers]);
+  const tileUrl = useMemo(() => cartoTileUrl(), []);
 
   return (
     <MapContainer
@@ -93,10 +103,9 @@ export default function RadiusMap({
       className="h-full w-full"
       scrollWheelZoom
     >
-      {/* Graue Carto-Karte – kostenlos, kein API-Key */}
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        url={tileUrl}
       />
       <MapClickHandler onCenterChange={onCenterChange} />
       <Recenter center={center} radiusKm={radiusKm} />

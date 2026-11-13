@@ -31,6 +31,10 @@ export function setMerklisteStore(items: InternshipOffer[]) {
   merklisteCache = items;
   saveMerkliste(items);
   emit(merklisteListeners);
+  // Optional Cloud-Sync (Supabase) – Fehler werden nur geloggt
+  void import("@/lib/favorites-sync")
+    .then(({ syncFavoritesToSupabase }) => syncFavoritesToSupabase(items))
+    .catch(() => undefined);
 }
 
 export function getProfile(): StudentProfile | null {
