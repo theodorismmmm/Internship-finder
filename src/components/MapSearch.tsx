@@ -78,8 +78,9 @@ export function MapSearch({
         Ort & Umkreis
       </h2>
       <p className="mt-2 text-[15px] text-neutral-500">
-        Einfach Adresse suchen oder auf die Karte tippen – ohne Lebenslauf und
-        ohne Interessen.
+        Adresse oder Stadtteil suchen (z. B. „Airport-Stadt Bremen“) oder auf
+        die Karte tippen. Es erscheinen offene Stellen und – wenn aktiviert –
+        alle Betriebe in der Nähe zur Initiativbewerbung.
       </p>
 
       <form
@@ -151,8 +152,9 @@ export function MapSearch({
           onChange={(e) => onIncludeOsmChange(e.target.checked)}
         />
         <span>
-          Zusätzlich Betriebe ohne Anzeige (OpenStreetMap – kann langsamer
-          sein)
+          Alle Betriebe anzeigen – auch ohne freie Praktikumsstelle
+          (Ausbildungsbetriebe der Arbeitsagentur + OpenStreetMap,
+          Initiativbewerbung). Empfohlen.
         </span>
       </label>
 
