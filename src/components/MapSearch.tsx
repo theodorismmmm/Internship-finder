@@ -2,13 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { Loader2, MapPin, Search } from "lucide-react";
 import type { InternshipOffer, MapCenter } from "@/lib/types";
 
 const RadiusMap = dynamic(() => import("./RadiusMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl bg-teal-50 text-sm text-teal-800">
+    <div className="flex h-full min-h-[320px] items-center justify-center bg-neutral-50 text-[13px] text-neutral-400">
       Karte wird geladen…
     </div>
   ),
@@ -59,65 +58,62 @@ export function MapSearch({
       if (data.results?.[0]) {
         onCenterChange(data.results[0]);
       } else {
-        setGeoError("Keine Treffer in Deutschland gefunden.");
+        setGeoError("Keine Treffer in Deutschland.");
       }
     } catch (err) {
-      setGeoError(err instanceof Error ? err.message : "Adresssuche fehlgeschlagen");
+      setGeoError(
+        err instanceof Error ? err.message : "Adresssuche fehlgeschlagen",
+      );
     } finally {
       setGeoLoading(false);
     }
   }
 
   return (
-    <section className="rounded-3xl border border-teal-900/10 bg-white/80 p-5 shadow-sm sm:p-6">
-      <h2 className="font-[family-name:var(--font-display)] text-2xl text-teal-950">
-        3. Ort & Umkreis
+    <section className="border-b border-neutral-200 pb-10">
+      <p className="text-[11px] font-medium tracking-[0.14em] text-neutral-400 uppercase">
+        Karte
+      </p>
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">
+        Ort & Umkreis
       </h2>
-      <p className="mt-1 text-sm text-teal-900/70">
-        Klicke auf die Karte oder suche eine Adresse. Ziehe den Slider für den
-        Radius (1–50 km).
+      <p className="mt-2 text-[15px] text-neutral-500">
+        Einfach Adresse suchen oder auf die Karte tippen – ohne Lebenslauf und
+        ohne Interessen.
       </p>
 
       <form
         onSubmit={searchAddress}
-        className="mt-4 flex flex-col gap-2 sm:flex-row"
+        className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center"
       >
-        <div className="relative flex-1">
-          <MapPin className="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-teal-700/70" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Adresse oder Ort (z. B. München Hauptbahnhof)"
-            className="w-full rounded-xl border border-teal-900/15 bg-white py-2 pr-3 pl-9 text-sm outline-none ring-teal-600/30 focus:ring-2"
-          />
-        </div>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="z. B. München, Hamburg, PLZ…"
+          className="w-full flex-1 border-0 border-b border-neutral-200 bg-transparent py-2.5 text-[15px] outline-none placeholder:text-neutral-300 focus:border-neutral-950"
+        />
         <button
           type="submit"
           disabled={geoLoading}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-800/15 bg-white px-4 py-2 text-sm font-medium text-teal-950 hover:bg-teal-50"
+          className="rounded-full border border-neutral-200 px-4 py-2 text-[13px] font-medium text-neutral-900 hover:bg-neutral-50 disabled:opacity-50"
         >
-          {geoLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Search className="h-4 w-4" />
-          )}
-          Adresse suchen
+          {geoLoading ? "Suche…" : "Adresse"}
         </button>
       </form>
 
       {geoError && (
-        <p className="mt-2 text-sm text-rose-700" role="alert">
+        <p className="mt-2 text-[13px] text-neutral-950" role="alert">
           {geoError}
         </p>
       )}
 
       {suggestions.length > 1 && (
-        <ul className="mt-2 space-y-1">
+        <ul className="mt-3 space-y-1">
           {suggestions.map((s) => (
             <li key={`${s.lat}-${s.lon}-${s.label}`}>
               <button
                 type="button"
-                className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-teal-900 hover:bg-teal-50"
+                className="w-full py-1.5 text-left text-[13px] text-neutral-600 hover:text-neutral-950"
                 onClick={() => onCenterChange(s)}
               >
                 {s.label}
@@ -127,10 +123,14 @@ export function MapSearch({
         </ul>
       )}
 
-      <div className="mt-4">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium text-teal-950">Umkreis</span>
-          <span className="tabular-nums text-teal-800">{radiusKm} km</span>
+      <div className="mt-8">
+        <div className="flex items-baseline justify-between">
+          <span className="text-[13px] font-medium text-neutral-950">
+            Radius
+          </span>
+          <span className="text-[13px] tabular-nums text-neutral-500">
+            {radiusKm} km
+          </span>
         </div>
         <input
           type="range"
@@ -138,27 +138,25 @@ export function MapSearch({
           max={50}
           value={radiusKm}
           onChange={(e) => onRadiusChange(Number(e.target.value))}
-          className="mt-2 w-full accent-teal-700"
+          className="mt-3 w-full"
         />
-        <p className="mt-1 text-xs text-teal-900/55">
-          Mittelpunkt: {center.label}
-        </p>
+        <p className="mt-2 text-[12px] text-neutral-400">{center.label}</p>
       </div>
 
-      <label className="mt-3 flex items-start gap-2 text-sm text-teal-900/80">
+      <label className="mt-5 flex items-start gap-2.5 text-[13px] text-neutral-600">
         <input
           type="checkbox"
-          className="mt-1 accent-teal-700"
+          className="mt-0.5"
           checked={includeOsm}
           onChange={(e) => onIncludeOsmChange(e.target.checked)}
         />
         <span>
-          Zusätzlich Betriebe aus OpenStreetMap laden (ohne ausgeschriebenes
-          Angebot – klar als Initiativbewerbung gekennzeichnet)
+          Zusätzlich Betriebe ohne Anzeige (OpenStreetMap – kann langsamer
+          sein)
         </span>
       </label>
 
-      <div className="mt-4 h-[360px] overflow-hidden rounded-2xl border border-teal-900/10 sm:h-[420px]">
+      <div className="mt-6 h-[380px] overflow-hidden border border-neutral-200 sm:h-[460px]">
         <RadiusMap
           center={center}
           radiusKm={radiusKm}
@@ -173,13 +171,8 @@ export function MapSearch({
         type="button"
         onClick={onSearch}
         disabled={searching}
-        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-60 sm:w-auto"
+        className="mt-6 w-full rounded-full bg-neutral-950 px-6 py-3.5 text-[14px] font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50 sm:w-auto"
       >
-        {searching ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Search className="h-4 w-4" />
-        )}
         {searching ? "Suche läuft…" : "Praktika in der Nähe suchen"}
       </button>
     </section>
