@@ -35,7 +35,7 @@ export function AppShell() {
   const [fields, setFields] = useState<CareerFieldId[]>([]);
   const [center, setCenter] = useState<MapCenter>(DEFAULT_CENTER);
   const [radiusKm, setRadiusKm] = useState(15);
-  const [includeOsm, setIncludeOsm] = useState(true);
+  const [includeOsm, setIncludeOsm] = useState(false);
   const [offers, setOffers] = useState<InternshipOffer[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
@@ -49,6 +49,7 @@ export function AppShell() {
   const [merklisteOpen, setMerklisteOpen] = useState(false);
   const [coverText, setCoverText] = useState("");
   const [coverOpen, setCoverOpen] = useState(false);
+  const [showOptional, setShowOptional] = useState(false);
 
   const suggestedFields = activeProfile?.suggestedFields ?? [];
   const selectedFields = fields;
@@ -61,6 +62,7 @@ export function AppShell() {
   function handleProfile(next: StudentProfile) {
     setManualProfile(next);
     setStoredProfile(next);
+    setShowOptional(true);
     if (next.suggestedFields.length) {
       setFields((prev) => (prev.length ? prev : next.suggestedFields));
     }
@@ -68,6 +70,7 @@ export function AppShell() {
 
   function handleSkipCv() {
     setManualProfile(emptyProfile());
+    setShowOptional(true);
   }
 
   function updateProfile(next: StudentProfile) {
@@ -88,7 +91,7 @@ export function AppShell() {
           fields: selectedFields,
           profile: activeProfile,
           includeOsm,
-          enrichDescriptions: true,
+          enrichDescriptions: false,
         }),
       });
       const data = await res.json();
@@ -118,75 +121,82 @@ export function AppShell() {
   }
 
   return (
-    <div className="min-h-full">
+    <div className="min-h-full bg-white">
       <Header
         merklisteCount={merkliste.length}
         onOpenMerkliste={() => setMerklisteOpen(true)}
       />
 
-      <main className="relative mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <section className="hero-panel relative overflow-hidden rounded-[2rem] border border-teal-900/10 px-5 py-8 sm:px-8 sm:py-10">
-          <div className="radar-ring radar-ring-a" aria-hidden />
-          <div className="radar-ring radar-ring-b" aria-hidden />
-          <div className="relative max-w-2xl">
-            <p className="font-[family-name:var(--font-display)] text-4xl tracking-tight text-teal-950 sm:text-5xl">
-              PraktikumsRadar
-            </p>
-            <h1 className="mt-3 text-lg font-medium text-teal-900/85 sm:text-xl">
-              Finde passende Schülerpraktika in deiner Nähe – mit Profil,
-              Karte und echten Angeboten.
-            </h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-teal-900/65">
-              Lebenslauf hochladen, Berufsfelder wählen, Radius setzen und
-              Angebote der Bundesagentur für Arbeit vergleichen.
-            </p>
-          </div>
+      <main className="mx-auto max-w-5xl px-5 py-10 sm:px-8">
+        <section className="pb-10">
+          <h1 className="text-4xl font-semibold tracking-tight text-neutral-950 sm:text-5xl">
+            PraktikumsRadar
+          </h1>
+          <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-neutral-500">
+            Ort wählen, suchen, fertig. Lebenslauf und Interessen sind optional.
+          </p>
         </section>
 
-        <div className="mt-6 space-y-6">
-          <CvUpload onParsed={handleProfile} onSkip={handleSkipCv} />
+        {/* Karte zuerst – ohne CV/Interessen nutzbar */}
+        <MapSearch
+          center={center}
+          radiusKm={radiusKm}
+          offers={offers}
+          selectedId={selectedId}
+          includeOsm={includeOsm}
+          onCenterChange={setCenter}
+          onRadiusChange={setRadiusKm}
+          onIncludeOsmChange={setIncludeOsm}
+          onSelectOffer={setSelectedId}
+          onSearch={() => void runSearch()}
+          searching={searching}
+        />
 
-          {activeProfile && (
-            <ProfileEditor profile={activeProfile} onChange={updateProfile} />
+        <ResultsPanel
+          offers={offers}
+          selectedId={selectedId}
+          bookmarkedIds={bookmarkedIds}
+          meta={meta}
+          error={searchError}
+          onSelect={setSelectedId}
+          onToggleBookmark={toggleBookmark}
+          onCoverLetter={openCoverLetter}
+        />
+
+        <div className="border-t border-neutral-200 pt-10">
+          <button
+            type="button"
+            onClick={() => setShowOptional((v) => !v)}
+            className="text-[13px] font-medium text-neutral-500 underline-offset-4 hover:text-neutral-950 hover:underline"
+          >
+            {showOptional
+              ? "Optionales ausblenden"
+              : "Optional: Lebenslauf & Interessen für bessere Passung"}
+          </button>
+
+          {showOptional && (
+            <div className="mt-2">
+              <CvUpload onParsed={handleProfile} onSkip={handleSkipCv} />
+              {activeProfile && (
+                <ProfileEditor
+                  profile={activeProfile}
+                  onChange={updateProfile}
+                />
+              )}
+              <FieldSelector
+                selected={selectedFields}
+                suggested={suggestedFields}
+                onChange={setFields}
+              />
+            </div>
           )}
-
-          <FieldSelector
-            selected={selectedFields}
-            suggested={suggestedFields}
-            onChange={setFields}
-          />
-
-          <MapSearch
-            center={center}
-            radiusKm={radiusKm}
-            offers={offers}
-            selectedId={selectedId}
-            includeOsm={includeOsm}
-            onCenterChange={setCenter}
-            onRadiusChange={setRadiusKm}
-            onIncludeOsmChange={setIncludeOsm}
-            onSelectOffer={setSelectedId}
-            onSearch={() => void runSearch()}
-            searching={searching}
-          />
-
-          <ResultsPanel
-            offers={offers}
-            selectedId={selectedId}
-            bookmarkedIds={bookmarkedIds}
-            meta={meta}
-            error={searchError}
-            onSelect={setSelectedId}
-            onToggleBookmark={toggleBookmark}
-            onCoverLetter={openCoverLetter}
-          />
         </div>
 
-        <footer className="mt-10 border-t border-teal-900/10 pt-6 pb-8 text-xs text-teal-900/55">
+        <footer className="mt-16 border-t border-neutral-200 pt-6 pb-10 text-[11px] leading-relaxed text-neutral-400">
           <p>
-            Datenquellen: Bundesagentur für Arbeit (Jobsuche-API), OpenStreetMap
-            / Overpass, Nominatim. Bewertungen sind automatische Schätzungen.
-            Keine erfundenen Angebote.
+            Keine Google-/Mapbox-Keys nötig. Karte: OpenStreetMap / CARTO ·
+            Adressen: Nominatim · Praktika: Bundesagentur für Arbeit · optional
+            OSM/Overpass. Bewertungen sind Schätzungen.
           </p>
         </footer>
       </main>

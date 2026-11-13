@@ -1,39 +1,31 @@
 # PraktikumsRadar
 
-Web-App für Schülerinnen und Schüler (Klasse 8–10) in Deutschland: Lebenslauf auswerten, Berufsfelder wählen, Umkreis auf der Karte setzen und echte Praktikumsangebote der Bundesagentur für Arbeit finden.
+Schülerpraktika finden (Klasse 8–10) – Karte, Umkreis, echte Angebote der Bundesagentur für Arbeit.
 
-## Tech
+## Brauche ich API-Keys?
 
-- Next.js (App Router) + TypeScript + Tailwind CSS
-- Leaflet + OpenStreetMap
-- pdf-parse / mammoth (Lebenslauf, nur temporär im Speicher)
-- Jobsuche-API der BA, Nominatim, Overpass
-- Deployment: Vercel
+**Nein – keine Google Maps / Mapbox Keys.**
 
-## Start
+| Dienst | Key? | Woher |
+|--------|------|--------|
+| Karte (Leaflet + OSM/CARTO) | Nein | schon eingebaut |
+| Adresssuche (Nominatim) | Nein | nur User-Agent in `.env.local` |
+| Praktika (BA Jobsuche) | Nein | öffentliche Client-ID `jobboerse-jobsuche` |
+| OSM-Betriebe (Overpass) | Nein | optional, kann langsam sein |
 
 ```bash
 cp .env.example .env.local
-npm install
-npm run dev
+# GEO_USER_AGENT mit deiner Mail anpassen – fertig
+npm install && npm run dev
 ```
 
-App: [http://localhost:3000](http://localhost:3000)
+## Nutzung ohne Lebenslauf
 
-## Testen – Schritte
+1. Seite öffnen → Karte ist sofort da  
+2. Adresse suchen oder auf die Karte tippen  
+3. Radius einstellen → **Praktika suchen**  
+4. Lebenslauf & Interessen sind optional (unten aufklappbar)
 
-1. **Karte + Radius:** Adresse suchen oder auf die Karte klicken, Slider 1–50 km – Kreis muss sichtbar sein.
-2. **API:** „Praktika in der Nähe suchen“ – BA-Anzeigen erscheinen als Marker/Liste (keine erfundenen Daten).
-3. **Lebenslauf:** PDF/DOCX hochladen – Profil wird befüllt, Datei wird nicht gespeichert (Datenschutzhinweis).
-4. **Bewertung:** Passung %, Schwierigkeit, Fahrzeiten; Tooltip/Details erklären die Schätzung.
-5. **Merkliste / Anschreiben:** Merken (localStorage), Anschreiben-Entwurf erzeugen und kopieren.
+## Tech
 
-## Struktur
-
-Siehe [docs/KOMPONENTEN.md](docs/KOMPONENTEN.md).
-
-## Hinweise
-
-- Bewertungen und Fahrzeiten sind **automatische Schätzungen**.
-- OSM-Treffer sind klar als **Initiativbewerbung** gekennzeichnet.
-- API-Keys nur in `.env.local`.
+Next.js · TypeScript · Tailwind · Leaflet · pdf-parse / mammoth

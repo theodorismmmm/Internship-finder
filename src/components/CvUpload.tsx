@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { FileUp, Loader2, ShieldCheck } from "lucide-react";
 import type { StudentProfile } from "@/lib/types";
 
 interface CvUploadProps {
@@ -35,35 +34,33 @@ export function CvUpload({ onParsed, onSkip }: CvUploadProps) {
   }
 
   return (
-    <section className="rounded-3xl border border-teal-900/10 bg-white/80 p-5 shadow-sm sm:p-6">
-      <h2 className="font-[family-name:var(--font-display)] text-2xl text-teal-950">
-        1. Lebenslauf hochladen
+    <section className="border-b border-neutral-200 py-10">
+      <p className="text-[11px] font-medium tracking-[0.14em] text-neutral-400 uppercase">
+        Optional
+      </p>
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">
+        Lebenslauf
       </h2>
-      <p className="mt-1 max-w-2xl text-sm text-teal-900/70">
-        Lade deinen Lebenslauf als PDF oder DOCX hoch. Wir lesen nur den Text aus
-        und zeigen dir ein bearbeitbares Profil.
+      <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-neutral-500">
+        Freiwillig. PDF oder DOCX – Text wird nur kurz gelesen, Datei wird nicht
+        gespeichert. Die Karte funktioniert auch ohne.
       </p>
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
         <button
           type="button"
           disabled={loading}
           onClick={() => inputRef.current?.click()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-60"
+          className="rounded-full bg-neutral-950 px-5 py-2.5 text-[13px] font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50"
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <FileUp className="h-4 w-4" />
-          )}
-          {loading ? "Wird gelesen…" : "PDF / DOCX wählen"}
+          {loading ? "Wird gelesen…" : "Datei wählen"}
         </button>
         <button
           type="button"
           onClick={onSkip}
-          className="text-sm font-medium text-teal-800 underline-offset-2 hover:underline"
+          className="text-[13px] font-medium text-neutral-500 underline-offset-4 hover:text-neutral-950 hover:underline"
         >
-          Ohne Lebenslauf weiter (Profil manuell)
+          Manuell fortfahren
         </button>
         <input
           ref={inputRef}
@@ -78,21 +75,15 @@ export function CvUpload({ onParsed, onSkip }: CvUploadProps) {
         />
       </div>
 
-      <div className="mt-4 flex gap-2 rounded-2xl bg-teal-50 px-3 py-2.5 text-sm text-teal-900/80">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
-        <p>
-          <strong>Datenschutz:</strong> Dein Lebenslauf wird{" "}
-          <strong>nicht gespeichert</strong>. Die Datei wird nur kurz auf dem
-          Server im Arbeitsspeicher gelesen und danach verworfen. Das Profil
-          bleibt nur in deinem Browser (optional).
-        </p>
-      </div>
-
+      <p className="mt-5 max-w-xl text-[12px] leading-relaxed text-neutral-400">
+        Datenschutz: Verarbeitung nur im Arbeitsspeicher. Profil optional lokal
+        im Browser.
+      </p>
       {privacyNote && (
-        <p className="mt-2 text-sm text-teal-800">{privacyNote}</p>
+        <p className="mt-2 text-[13px] text-neutral-600">{privacyNote}</p>
       )}
       {error && (
-        <p className="mt-2 text-sm text-rose-700" role="alert">
+        <p className="mt-2 text-[13px] text-neutral-950" role="alert">
           {error}
         </p>
       )}

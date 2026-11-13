@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, X } from "lucide-react";
 
 interface CoverLetterModalProps {
   open: boolean;
@@ -26,38 +25,40 @@ export function CoverLetterModal({ open, text, onClose }: CoverLetterModalProps)
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-teal-950/40 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
       role="dialog"
       aria-modal
       aria-label="Anschreiben-Entwurf"
+      onClick={onClose}
     >
-      <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-3xl bg-white p-5 shadow-xl">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-[family-name:var(--font-display)] text-xl text-teal-950">
-            Anschreiben-Entwurf
+      <div
+        className="max-h-[85vh] w-full max-w-xl overflow-auto bg-white p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-[17px] font-semibold tracking-tight text-neutral-950">
+            Anschreiben
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-teal-900 hover:bg-teal-50"
-            aria-label="Schließen"
+            className="text-[13px] text-neutral-500 hover:text-neutral-950"
           >
-            <X className="h-5 w-5" />
+            Schließen
           </button>
         </div>
-        <p className="mt-1 text-sm text-teal-900/65">
-          Automatisch erzeugt – bitte prüfen und persönlich anpassen.
+        <p className="mt-1 text-[12px] text-neutral-400">
+          Entwurf – bitte prüfen und anpassen.
         </p>
-        <pre className="mt-4 whitespace-pre-wrap rounded-2xl bg-teal-50/80 p-4 text-sm leading-relaxed text-teal-950">
+        <pre className="mt-5 whitespace-pre-wrap text-[13px] leading-relaxed text-neutral-700">
           {text}
         </pre>
         <button
           type="button"
           onClick={() => void copy()}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+          className="mt-6 rounded-full bg-neutral-950 px-5 py-2.5 text-[13px] font-medium text-white hover:bg-neutral-800"
         >
-          <Copy className="h-4 w-4" />
-          {copied ? "Kopiert!" : "Text kopieren"}
+          {copied ? "Kopiert" : "Kopieren"}
         </button>
       </div>
     </div>

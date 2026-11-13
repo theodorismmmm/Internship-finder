@@ -7,36 +7,26 @@ interface ProfileEditorProps {
   onChange: (profile: StudentProfile) => void;
 }
 
-function TagInput({
+function Field({
   label,
-  values,
+  value,
   onChange,
   placeholder,
 }: {
   label: string;
-  values: string[];
-  onChange: (values: string[]) => void;
+  value: string;
+  onChange: (v: string) => void;
   placeholder: string;
 }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-teal-950">{label}</span>
+      <span className="text-[12px] font-medium text-neutral-500">{label}</span>
       <input
-        className="mt-1 w-full rounded-xl border border-teal-900/15 bg-white px-3 py-2 text-sm outline-none ring-teal-600/30 focus:ring-2"
-        value={values.join(", ")}
+        className="mt-1.5 w-full border-0 border-b border-neutral-200 bg-transparent px-0 py-2 text-[15px] text-neutral-950 outline-none transition placeholder:text-neutral-300 focus:border-neutral-950"
+        value={value}
         placeholder={placeholder}
-        onChange={(e) =>
-          onChange(
-            e.target.value
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-          )
-        }
+        onChange={(e) => onChange(e.target.value)}
       />
-      <span className="mt-1 block text-xs text-teal-900/50">
-        Mehrere Einträge mit Komma trennen
-      </span>
     </label>
   );
 }
@@ -46,61 +36,74 @@ export function ProfileEditor({ profile, onChange }: ProfileEditorProps) {
     onChange({ ...profile, ...partial });
   }
 
+  function list(values: string[]) {
+    return values.join(", ");
+  }
+
+  function parseList(raw: string) {
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
   return (
-    <section className="rounded-3xl border border-teal-900/10 bg-white/80 p-5 shadow-sm sm:p-6">
-      <h2 className="font-[family-name:var(--font-display)] text-2xl text-teal-950">
-        Dein Profil
+    <section className="border-b border-neutral-200 py-10">
+      <p className="text-[11px] font-medium tracking-[0.14em] text-neutral-400 uppercase">
+        Profil
+      </p>
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-950">
+        Angaben prüfen
       </h2>
-      <p className="mt-1 text-sm text-teal-900/70">
-        Prüfe und ergänze die automatisch erkannten Angaben.
+      <p className="mt-2 text-[15px] text-neutral-500">
+        Komma trennt mehrere Einträge.
       </p>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <label className="block sm:col-span-2">
-          <span className="text-sm font-medium text-teal-950">Name</span>
-          <input
-            className="mt-1 w-full rounded-xl border border-teal-900/15 bg-white px-3 py-2 text-sm outline-none ring-teal-600/30 focus:ring-2"
-            value={profile.name}
-            onChange={(e) => patch({ name: e.target.value })}
-            placeholder="Vor- und Nachname"
-          />
-        </label>
-        <TagInput
+      <div className="mt-8 grid gap-6 sm:grid-cols-2">
+        <Field
+          label="Name"
+          value={profile.name}
+          onChange={(name) => patch({ name })}
+          placeholder="Vor- und Nachname"
+        />
+        <Field
           label="Schulfächer"
-          values={profile.schoolSubjects}
-          onChange={(schoolSubjects) => patch({ schoolSubjects })}
-          placeholder="z. B. Mathematik, Informatik"
+          value={list(profile.schoolSubjects)}
+          onChange={(v) => patch({ schoolSubjects: parseList(v) })}
+          placeholder="Mathematik, Informatik"
         />
-        <TagInput
+        <Field
           label="Stärken"
-          values={profile.strengths}
-          onChange={(strengths) => patch({ strengths })}
-          placeholder="z. B. Teamfähig, kreativ"
+          value={list(profile.strengths)}
+          onChange={(v) => patch({ strengths: parseList(v) })}
+          placeholder="Zuverlässig, kreativ"
         />
-        <TagInput
+        <Field
           label="Sprachen"
-          values={profile.languages}
-          onChange={(languages) => patch({ languages })}
-          placeholder="z. B. Deutsch, Englisch"
+          value={list(profile.languages)}
+          onChange={(v) => patch({ languages: parseList(v) })}
+          placeholder="Deutsch, Englisch"
         />
-        <TagInput
+        <Field
           label="Kenntnisse"
-          values={profile.skills}
-          onChange={(skills) => patch({ skills })}
-          placeholder="z. B. Word, Python"
+          value={list(profile.skills)}
+          onChange={(v) => patch({ skills: parseList(v) })}
+          placeholder="Word, Python"
         />
-        <TagInput
+        <Field
           label="Hobbys"
-          values={profile.hobbies}
-          onChange={(hobbies) => patch({ hobbies })}
-          placeholder="z. B. Fußball, Basteln"
+          value={list(profile.hobbies)}
+          onChange={(v) => patch({ hobbies: parseList(v) })}
+          placeholder="Fußball, Fotografie"
         />
-        <TagInput
-          label="Bisherige Praktika"
-          values={profile.previousInternships}
-          onChange={(previousInternships) => patch({ previousInternships })}
-          placeholder="z. B. Büro bei Meier GmbH"
-        />
+        <div className="sm:col-span-2">
+          <Field
+            label="Bisherige Praktika"
+            value={list(profile.previousInternships)}
+            onChange={(v) => patch({ previousInternships: parseList(v) })}
+            placeholder="z. B. Büro bei Meier GmbH"
+          />
+        </div>
       </div>
     </section>
   );
