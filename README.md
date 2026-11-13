@@ -14,8 +14,9 @@ Schülerpraktika finden (Klasse 8–10) – Karte, Umkreis, echte Angebote der B
 | Dienst | Key? | Woher |
 |--------|------|--------|
 | Karte (Leaflet + OSM/CARTO) | Nein | schon eingebaut |
-| Adresssuche (Nominatim) | Nein | nur User-Agent |
-| Praktika (BA Jobsuche) | Nein | `jobboerse-jobsuche` |
+| Adresssuche (Nominatim) | Nein | nur User-Agent in `.env.local` |
+| Praktika (BA Jobsuche) | Nein | öffentliche Client-ID `jobboerse-jobsuche` |
+| OSM-Betriebe (Overpass) | Nein | optional, kann langsam sein |
 | Supabase | Ja (kostenlos) | Project Settings → API |
 
 ```bash
