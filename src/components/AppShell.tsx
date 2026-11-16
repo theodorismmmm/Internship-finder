@@ -37,6 +37,7 @@ export function AppShell() {
   const [center, setCenter] = useState<MapCenter>(DEFAULT_CENTER);
   const [radiusKm, setRadiusKm] = useState(25);
   const [includeOsm, setIncludeOsm] = useState(true);
+  const [schuelerOnly, setSchuelerOnly] = useState(false);
   const [offers, setOffers] = useState<InternshipOffer[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
@@ -95,6 +96,7 @@ export function AppShell() {
         profile: activeProfile,
         includeOsm: false,
         enrichDescriptions: false,
+        schuelerOnly,
       }),
     });
     const data = await res.json();
@@ -147,10 +149,13 @@ export function AppShell() {
       setSearching(false);
 
       // 2) Alle weiteren Betriebe (Ausbildungsbetriebe, Interns, OSM/POIs)
-      if (!includeOsm) {
+      // Bei „Nur Schülerpraktikum“ keine Initiativ-/OSM-Betriebe nachladen
+      if (!includeOsm || schuelerOnly) {
         if (baOffers.length === 0) {
           setSearchError(
-            "Keine Treffer. Radius vergrößern oder „Alle Betriebe“ aktivieren.",
+            schuelerOnly
+              ? "Keine Schülerpraktika in diesem Umkreis. Radius vergrößern oder Filter ausschalten."
+              : "Keine Treffer. Radius vergrößern oder „Alle Betriebe“ aktivieren.",
           );
         }
         return;
@@ -242,9 +247,11 @@ export function AppShell() {
           offers={offers}
           selectedId={selectedId}
           includeOsm={includeOsm}
+          schuelerOnly={schuelerOnly}
           onCenterChange={setCenter}
           onRadiusChange={setRadiusKm}
           onIncludeOsmChange={setIncludeOsm}
+          onSchuelerOnlyChange={setSchuelerOnly}
           onSelectOffer={setSelectedId}
           onSearch={() => void runSearch()}
           searching={searching}
@@ -257,6 +264,7 @@ export function AppShell() {
           bookmarkedIds={bookmarkedIds}
           meta={meta}
           error={searchError}
+          defaultSchuelerOnly={schuelerOnly}
           onSelect={setSelectedId}
           onToggleBookmark={toggleBookmark}
           onCoverLetter={openCoverLetter}
