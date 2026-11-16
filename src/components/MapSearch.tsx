@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { InternshipOffer, MapCenter } from "@/lib/types";
 
 const RadiusMap = dynamic(() => import("./RadiusMap"), {
@@ -25,6 +25,7 @@ interface MapSearchProps {
   onSelectOffer: (id: string) => void;
   onSearch: () => void;
   searching: boolean;
+  autoSearchOnMount?: boolean;
 }
 
 export function MapSearch({
@@ -39,11 +40,22 @@ export function MapSearch({
   onSelectOffer,
   onSearch,
   searching,
+  autoSearchOnMount = false,
 }: MapSearchProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<MapCenter[]>([]);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const didAutoSearch = useRef(false);
+  const onSearchRef = useRef(onSearch);
+  onSearchRef.current = onSearch;
+
+  useEffect(() => {
+    if (!autoSearchOnMount || didAutoSearch.current) return;
+    didAutoSearch.current = true;
+    const timer = window.setTimeout(() => onSearchRef.current(), 50);
+    return () => window.clearTimeout(timer);
+  }, [autoSearchOnMount]);
 
   async function searchAddress(e?: React.FormEvent) {
     e?.preventDefault();
@@ -78,9 +90,9 @@ export function MapSearch({
         Ort & Umkreis
       </h2>
       <p className="mt-2 text-[15px] text-neutral-500">
-        Adresse oder Stadtteil suchen (z. B. „Airport-Stadt Bremen“) oder auf
-        die Karte tippen. Es erscheinen offene Stellen und – wenn aktiviert –
-        alle Betriebe in der Nähe zur Initiativbewerbung.
+        Start in Bremen. Adresse suchen oder auf die Karte tippen – es werden
+        offene Stellen und möglichst alle Betriebe in der Nähe geladen (auch
+        ohne freie Praktikumsanzeige).
       </p>
 
       <form

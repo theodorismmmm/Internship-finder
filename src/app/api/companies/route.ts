@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { searchBaTrainingCompanies } from "@/lib/ba-api";
 import { searchOsmCompanies } from "@/lib/overpass";
+import { searchNearbyPois } from "@/lib/poi-companies";
 import type { CareerFieldId, MapCenter, StudentProfile } from "@/lib/types";
 
 interface Body {
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Body;
     const { center, profile } = body;
-    const radiusKm = Math.min(50, Math.max(1, Number(body.radiusKm) || 10));
+    const radiusKm = Math.min(50, Math.max(1, Number(body.radiusKm) || 15));
     const fields = Array.isArray(body.fields) ? body.fields : [];
 
     if (
@@ -35,20 +36,27 @@ export async function POST(request: Request) {
       ),
     );
 
-    // 1) Zuverlässig: Ausbildungsbetriebe von der BA (echte Daten)
-    const training = await searchBaTrainingCompanies({
-      center,
-      radiusKm,
-      selectedFields: fields,
-      profile: profile ?? null,
-      existingCompanyKeys: existing,
-    });
+    const [training, pois] = await Promise.all([
+      searchBaTrainingCompanies({
+        center,
+        radiusKm,
+        selectedFields: fields,
+        profile: profile ?? null,
+        existingCompanyKeys: existing,
+      }),
+      searchNearbyPois({
+        center,
+        radiusKm,
+        selectedFields: fields,
+        profile: profile ?? null,
+        existingCompanyKeys: existing,
+      }),
+    ]);
 
-    for (const o of training) {
+    for (const o of [...training, ...pois]) {
       existing.add(o.company.toLowerCase().replace(/\s+/g, " ").trim());
     }
 
-    // 2) Optional: weitere OSM-Betriebe (kann bei Overpass-Last leer sein)
     let osm: typeof training = [];
     let osmError: string | null = null;
     try {
@@ -66,17 +74,18 @@ export async function POST(request: Request) {
           : "OSM-Betriebe gerade nicht erreichbar.";
     }
 
-    const offers = [...training, ...osm];
+    const offers = [...training, ...pois, ...osm];
 
     return NextResponse.json({
       offers,
       meta: {
         count: offers.length,
         trainingCount: training.length,
+        poiCount: pois.length,
         osmCount: osm.length,
         osmError,
         disclaimer:
-          "Betriebe ohne Schülerpraktikums-Anzeige: Ausbildungsbetriebe (BA) und ggf. OpenStreetMap – Initiativbewerbung möglich.",
+          "Betriebe ohne Schülerpraktikums-Anzeige aus BA (Ausbildung/Intern) und OpenStreetMap – Initiativbewerbung möglich. Keine erfundenen Firmen.",
       },
     });
   } catch (error) {
