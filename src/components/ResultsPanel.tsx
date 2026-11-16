@@ -53,9 +53,10 @@ export function ResultsPanel({
   const [difficultyFilter, setDifficultyFilter] = useState<
     DifficultyLevel | "alle"
   >("alle");
-  const [sourceFilter, setSourceFilter] = useState<"alle" | "ba" | "osm">(
-    "alle",
-  );
+  /** stellen = offene Anzeigen · firmen = Initiativ (BA-Ausbildung + OSM) */
+  const [sourceFilter, setSourceFilter] = useState<
+    "alle" | "stellen" | "firmen"
+  >("alle");
   const [artFilter, setArtFilter] = useState<"alle" | "schueler" | "andere">(
     defaultSchuelerOnly ? "schueler" : "alle",
   );
@@ -66,8 +67,8 @@ export function ResultsPanel({
   }, [defaultSchuelerOnly]);
 
   useEffect(() => {
-    if (defaultSearchMode === "firmen") setSourceFilter("osm");
-    else if (defaultSearchMode === "stellen") setSourceFilter("ba");
+    if (defaultSearchMode === "firmen") setSourceFilter("firmen");
+    else if (defaultSearchMode === "stellen") setSourceFilter("stellen");
     else setSourceFilter("alle");
   }, [defaultSearchMode]);
 
@@ -76,8 +77,11 @@ export function ResultsPanel({
     if (difficultyFilter !== "alle") {
       list = list.filter((o) => o.score.difficulty === difficultyFilter);
     }
-    if (sourceFilter !== "alle") {
-      list = list.filter((o) => o.source === sourceFilter);
+    if (sourceFilter === "stellen") {
+      list = list.filter((o) => !o.isInitiative);
+    } else if (sourceFilter === "firmen") {
+      // BA-Ausbildungsbetriebe (source ba + initiative) und OSM/POIs
+      list = list.filter((o) => o.isInitiative || o.source === "osm");
     }
     if (artFilter === "schueler") {
       list = list.filter((o) => offerIsSchueler(o));
@@ -175,13 +179,15 @@ export function ResultsPanel({
           <select
             value={sourceFilter}
             onChange={(e) =>
-              setSourceFilter(e.target.value as "alle" | "ba" | "osm")
+              setSourceFilter(
+                e.target.value as "alle" | "stellen" | "firmen",
+              )
             }
             className="border-0 border-b border-neutral-200 bg-transparent py-1.5 text-[14px] outline-none focus:border-neutral-950"
           >
             <option value="alle">Alle (Stellen + Firmen)</option>
-            <option value="ba">Nur offene Stellen</option>
-            <option value="osm">Nur Firmen</option>
+            <option value="stellen">Nur offene Stellen</option>
+            <option value="firmen">Nur Firmen (inkl. BA-Betriebe)</option>
           </select>
         </label>
         <label className="text-[12px]">
