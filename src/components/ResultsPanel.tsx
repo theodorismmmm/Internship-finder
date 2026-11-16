@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { isSchuelerpraktikumOffer } from "@/lib/schuelerpraktikum";
 import { sortOffers } from "@/lib/scoring";
-import type { DifficultyLevel, InternshipOffer, SortKey } from "@/lib/types";
+import type {
+  DifficultyLevel,
+  InternshipOffer,
+  SearchMode,
+  SortKey,
+} from "@/lib/types";
 import { ResultCard } from "./ResultCard";
 
 interface ResultsPanelProps {
@@ -20,6 +25,7 @@ interface ResultsPanelProps {
   } | null;
   error: string | null;
   defaultSchuelerOnly?: boolean;
+  defaultSearchMode?: SearchMode;
   onSelect: (id: string) => void;
   onToggleBookmark: (offer: InternshipOffer) => void;
   onCoverLetter: (offer: InternshipOffer) => void;
@@ -37,6 +43,7 @@ export function ResultsPanel({
   meta,
   error,
   defaultSchuelerOnly = false,
+  defaultSearchMode = "beides",
   onSelect,
   onToggleBookmark,
   onCoverLetter,
@@ -57,6 +64,12 @@ export function ResultsPanel({
   useEffect(() => {
     if (defaultSchuelerOnly) setArtFilter("schueler");
   }, [defaultSchuelerOnly]);
+
+  useEffect(() => {
+    if (defaultSearchMode === "firmen") setSourceFilter("osm");
+    else if (defaultSearchMode === "stellen") setSourceFilter("ba");
+    else setSourceFilter("alle");
+  }, [defaultSearchMode]);
 
   const filtered = useMemo(() => {
     let list = offers.filter((o) => o.score.matchPercent >= minMatch);
@@ -166,9 +179,9 @@ export function ResultsPanel({
             }
             className="border-0 border-b border-neutral-200 bg-transparent py-1.5 text-[14px] outline-none focus:border-neutral-950"
           >
-            <option value="alle">Alle (Stellen + Betriebe)</option>
-            <option value="ba">Nur offene Stellen (BA)</option>
-            <option value="osm">Nur Betriebe ohne Anzeige</option>
+            <option value="alle">Alle (Stellen + Firmen)</option>
+            <option value="ba">Nur offene Stellen</option>
+            <option value="osm">Nur Firmen</option>
           </select>
         </label>
         <label className="text-[12px]">

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import type { InternshipOffer, MapCenter } from "@/lib/types";
+import type { InternshipOffer, MapCenter, SearchMode } from "@/lib/types";
 
 const RadiusMap = dynamic(() => import("./RadiusMap"), {
   ssr: false,
@@ -18,11 +18,11 @@ interface MapSearchProps {
   radiusKm: number;
   offers: InternshipOffer[];
   selectedId: string | null;
-  includeOsm: boolean;
+  searchMode: SearchMode;
   schuelerOnly: boolean;
   onCenterChange: (center: MapCenter) => void;
   onRadiusChange: (km: number) => void;
-  onIncludeOsmChange: (value: boolean) => void;
+  onSearchModeChange: (mode: SearchMode) => void;
   onSchuelerOnlyChange: (value: boolean) => void;
   onSelectOffer: (id: string) => void;
   onSearch: () => void;
@@ -30,16 +30,22 @@ interface MapSearchProps {
   autoSearchOnMount?: boolean;
 }
 
+const MODE_LABELS: Record<SearchMode, string> = {
+  stellen: "Nur Stellen",
+  firmen: "Nur Firmen",
+  beides: "Stellen + Firmen",
+};
+
 export function MapSearch({
   center,
   radiusKm,
   offers,
   selectedId,
-  includeOsm,
+  searchMode,
   schuelerOnly,
   onCenterChange,
   onRadiusChange,
-  onIncludeOsmChange,
+  onSearchModeChange,
   onSchuelerOnlyChange,
   onSelectOffer,
   onSearch,
@@ -85,6 +91,13 @@ export function MapSearch({
     }
   }
 
+  const searchButtonLabel =
+    searchMode === "firmen"
+      ? "Firmen in der Nähe suchen"
+      : searchMode === "stellen"
+        ? "Stellen in der Nähe suchen"
+        : "Stellen & Firmen suchen";
+
   return (
     <section className="border-b border-neutral-200 pb-10">
       <p className="text-[11px] font-medium tracking-[0.14em] text-neutral-400 uppercase">
@@ -94,9 +107,8 @@ export function MapSearch({
         Ort & Umkreis
       </h2>
       <p className="mt-2 text-[15px] text-neutral-500">
-        Start in Bremen. Adresse suchen oder auf die Karte tippen – es werden
-        offene Stellen und möglichst alle Betriebe in der Nähe geladen (auch
-        ohne freie Praktikumsanzeige).
+        Start in Bremen. Adresse suchen oder auf die Karte tippen – wähle, ob du
+        offene Praktikumsstellen, allgemein Firmen oder beides suchst.
       </p>
 
       <form
@@ -160,6 +172,46 @@ export function MapSearch({
         <p className="mt-2 text-[12px] text-neutral-400">{center.label}</p>
       </div>
 
+      <fieldset className="mt-6">
+        <legend className="text-[13px] font-medium text-neutral-950">
+          Was suchen?
+        </legend>
+        <div
+          className="mt-3 grid grid-cols-3 gap-1 border border-neutral-200 p-1"
+          role="radiogroup"
+          aria-label="Suchmodus"
+        >
+          {(["stellen", "firmen", "beides"] as SearchMode[]).map((mode) => {
+            const disabled = schuelerOnly && mode === "firmen";
+            const active = searchMode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={disabled}
+                onClick={() => onSearchModeChange(mode)}
+                className={`px-2 py-2 text-[12px] font-medium transition sm:text-[13px] ${
+                  active
+                    ? "bg-neutral-950 text-white"
+                    : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950"
+                } disabled:cursor-not-allowed disabled:opacity-40`}
+              >
+                {MODE_LABELS[mode]}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-[12px] text-neutral-400">
+          {searchMode === "firmen"
+            ? "Nur Betriebe in der Nähe – auch ohne offene Praktikumsanzeige (Initiativbewerbung)."
+            : searchMode === "stellen"
+              ? "Nur ausgeschriebene Praktika / Intern-Stellen der Arbeitsagentur."
+              : "Offene Stellen und zusätzliche Firmen ohne Anzeige."}
+        </p>
+      </fieldset>
+
       <label className="mt-5 flex items-start gap-2.5 text-[13px] text-neutral-600">
         <input
           type="checkbox"
@@ -170,22 +222,9 @@ export function MapSearch({
         <span>
           Nur Schülerpraktikum – sucht gezielt nach Schul-/Betriebspraktika
           für Schüler (Klassen ~8–10) und blendet Werkstudent/Intern aus.
-        </span>
-      </label>
-
-      <label className="mt-3 flex items-start gap-2.5 text-[13px] text-neutral-600">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={includeOsm}
-          disabled={schuelerOnly}
-          onChange={(e) => onIncludeOsmChange(e.target.checked)}
-        />
-        <span>
-          Alle Betriebe anzeigen – auch ohne freie Praktikumsstelle
-          (Ausbildungsbetriebe der Arbeitsagentur + OpenStreetMap,
-          Initiativbewerbung). Empfohlen.
-          {schuelerOnly ? " (bei „Nur Schülerpraktikum“ ausgeschaltet)" : ""}
+          {searchMode === "firmen"
+            ? " (nur mit Stellen-Suche sinnvoll)"
+            : ""}
         </span>
       </label>
 
@@ -206,7 +245,7 @@ export function MapSearch({
         disabled={searching}
         className="mt-6 w-full rounded-full bg-neutral-950 px-6 py-3.5 text-[14px] font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50 sm:w-auto"
       >
-        {searching ? "Suche läuft…" : "Praktika in der Nähe suchen"}
+        {searching ? "Suche läuft…" : searchButtonLabel}
       </button>
     </section>
   );
