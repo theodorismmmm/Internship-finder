@@ -39,9 +39,16 @@ export function ResultCard({
           </span>
         </div>
 
-        {offer.isInitiative && (
+        {(offer.isSchuelerpraktikum || offer.isInitiative) && (
           <p className="mt-3 text-[12px] text-neutral-500">
-            Ohne ausgeschriebenes Angebot · Initiativbewerbung möglich
+            {[
+              offer.isSchuelerpraktikum ? "Schülerpraktikum" : null,
+              offer.isInitiative
+                ? "Ohne ausgeschriebenes Angebot · Initiativbewerbung möglich"
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         )}
 

@@ -191,6 +191,7 @@ export async function searchNearbyPois(params: {
       professions: [],
       fieldHints: [],
       isInitiative: true,
+      isSchuelerpraktikum: false,
       score,
       travel: estimateTravel(distanceKm),
     });

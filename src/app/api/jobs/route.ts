@@ -13,6 +13,8 @@ interface JobsBody {
   profile: StudentProfile | null;
   includeOsm?: boolean;
   enrichDescriptions?: boolean;
+  /** Nur Anzeigen, die als Schülerpraktikum erkennbar sind */
+  schuelerOnly?: boolean;
 }
 
 export async function POST(request: Request) {
@@ -21,8 +23,9 @@ export async function POST(request: Request) {
     const { center, profile } = body;
     const radiusKm = Math.min(50, Math.max(1, Number(body.radiusKm) || 10));
     const fields = Array.isArray(body.fields) ? body.fields : [];
-    // Standard: auch Betriebe ohne offene Stelle laden
-    const includeOsm = body.includeOsm !== false;
+    const schuelerOnly = body.schuelerOnly === true;
+    // Standard: auch Betriebe ohne offene Stelle laden (außer bei reinem Schülerpraktikum-Filter)
+    const includeOsm = !schuelerOnly && body.includeOsm !== false;
 
     if (
       !center ||
@@ -44,6 +47,7 @@ export async function POST(request: Request) {
       searchTerms,
       selectedFields: fields,
       profile,
+      schuelerOnly,
     });
 
     const osmPromise = includeOsm

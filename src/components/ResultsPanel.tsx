@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { isSchuelerpraktikumOffer } from "@/lib/schuelerpraktikum";
 import { sortOffers } from "@/lib/scoring";
 import type { DifficultyLevel, InternshipOffer, SortKey } from "@/lib/types";
 import { ResultCard } from "./ResultCard";
@@ -18,9 +19,15 @@ interface ResultsPanelProps {
     disclaimer: string;
   } | null;
   error: string | null;
+  defaultSchuelerOnly?: boolean;
   onSelect: (id: string) => void;
   onToggleBookmark: (offer: InternshipOffer) => void;
   onCoverLetter: (offer: InternshipOffer) => void;
+}
+
+function offerIsSchueler(o: InternshipOffer): boolean {
+  if (typeof o.isSchuelerpraktikum === "boolean") return o.isSchuelerpraktikum;
+  return isSchuelerpraktikumOffer(o.title, o.description, o.professions);
 }
 
 export function ResultsPanel({
@@ -29,6 +36,7 @@ export function ResultsPanel({
   bookmarkedIds,
   meta,
   error,
+  defaultSchuelerOnly = false,
   onSelect,
   onToggleBookmark,
   onCoverLetter,
@@ -41,7 +49,14 @@ export function ResultsPanel({
   const [sourceFilter, setSourceFilter] = useState<"alle" | "ba" | "osm">(
     "alle",
   );
+  const [artFilter, setArtFilter] = useState<"alle" | "schueler" | "andere">(
+    defaultSchuelerOnly ? "schueler" : "alle",
+  );
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (defaultSchuelerOnly) setArtFilter("schueler");
+  }, [defaultSchuelerOnly]);
 
   const filtered = useMemo(() => {
     let list = offers.filter((o) => o.score.matchPercent >= minMatch);
@@ -51,8 +66,18 @@ export function ResultsPanel({
     if (sourceFilter !== "alle") {
       list = list.filter((o) => o.source === sourceFilter);
     }
+    if (artFilter === "schueler") {
+      list = list.filter((o) => offerIsSchueler(o));
+    } else if (artFilter === "andere") {
+      list = list.filter((o) => !offerIsSchueler(o));
+    }
     return sortOffers(list, sortKey);
-  }, [offers, minMatch, difficultyFilter, sourceFilter, sortKey]);
+  }, [offers, minMatch, difficultyFilter, sourceFilter, artFilter, sortKey]);
+
+  const schuelerCount = useMemo(
+    () => offers.filter((o) => offerIsSchueler(o)).length,
+    [offers],
+  );
 
   const detail = offers.find((o) => o.id === (detailId || selectedId)) || null;
 
@@ -69,6 +94,10 @@ export function ResultsPanel({
           ? `${meta.baCount} offene Stellen${
               meta.osmCount > 0
                 ? ` · ${meta.osmCount} Betriebe ohne Anzeige`
+                : ""
+            }${
+              schuelerCount > 0
+                ? ` · ${schuelerCount} als Schülerpraktikum erkannt`
                 : ""
             }${meta.searchPlace ? ` · Suche: ${meta.searchPlace}` : ""}`
           : "Noch keine Suche gestartet."}
@@ -142,13 +171,29 @@ export function ResultsPanel({
             <option value="osm">Nur Betriebe ohne Anzeige</option>
           </select>
         </label>
+        <label className="text-[12px]">
+          <span className="mb-1 block text-neutral-500">Art</span>
+          <select
+            value={artFilter}
+            onChange={(e) =>
+              setArtFilter(e.target.value as "alle" | "schueler" | "andere")
+            }
+            className="border-0 border-b border-neutral-200 bg-transparent py-1.5 text-[14px] outline-none focus:border-neutral-950"
+          >
+            <option value="alle">Alle Praktika</option>
+            <option value="schueler">Nur Schülerpraktikum</option>
+            <option value="andere">Ohne Schülerpraktikum</option>
+          </select>
+        </label>
       </div>
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[1.15fr_0.85fr]">
         <div>
           {filtered.length === 0 ? (
             <p className="py-12 text-[14px] text-neutral-400">
-              Keine Ergebnisse. Ort setzen und Suche starten.
+              {offers.length > 0 && artFilter === "schueler"
+                ? "Keine als Schülerpraktikum erkannten Treffer. Filter „Art“ auf „Alle“ stellen oder Suche mit „Nur Schülerpraktikum“ starten."
+                : "Keine Ergebnisse. Ort setzen und Suche starten."}
             </p>
           ) : (
             filtered.map((offer) => (
@@ -187,6 +232,11 @@ export function ResultsPanel({
                   {detail.locationLabel}
                 </p>
               </div>
+              {offerIsSchueler(detail) && (
+                <p className="text-[13px] font-medium text-neutral-950">
+                  Als Schülerpraktikum erkannt
+                </p>
+              )}
               {detail.isInitiative && (
                 <p className="text-[13px] text-neutral-500">
                   Initiativbewerbung möglich – kein ausgeschriebenes Angebot.

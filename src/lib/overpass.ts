@@ -245,6 +245,7 @@ export async function searchOsmCompanies(params: {
       professions: [],
       fieldHints,
       isInitiative: true,
+      isSchuelerpraktikum: false,
       score,
       travel: estimateTravel(distanceKm),
     });

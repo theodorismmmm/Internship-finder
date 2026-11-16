@@ -70,6 +70,8 @@ export interface InternshipOffer {
   professions: string[];
   fieldHints: CareerFieldId[];
   isInitiative: boolean;
+  /** Explizit als Schüler-/Schul-/Betriebspraktikum erkennbar */
+  isSchuelerpraktikum: boolean;
   publishedAt?: string;
   score: OfferScore;
   travel: TravelEstimates;
@@ -83,4 +85,5 @@ export interface SearchParams {
   fields: CareerFieldId[];
   profile: StudentProfile | null;
   includeOsm: boolean;
+  schuelerOnly?: boolean;
 }

@@ -19,9 +19,11 @@ interface MapSearchProps {
   offers: InternshipOffer[];
   selectedId: string | null;
   includeOsm: boolean;
+  schuelerOnly: boolean;
   onCenterChange: (center: MapCenter) => void;
   onRadiusChange: (km: number) => void;
   onIncludeOsmChange: (value: boolean) => void;
+  onSchuelerOnlyChange: (value: boolean) => void;
   onSelectOffer: (id: string) => void;
   onSearch: () => void;
   searching: boolean;
@@ -34,9 +36,11 @@ export function MapSearch({
   offers,
   selectedId,
   includeOsm,
+  schuelerOnly,
   onCenterChange,
   onRadiusChange,
   onIncludeOsmChange,
+  onSchuelerOnlyChange,
   onSelectOffer,
   onSearch,
   searching,
@@ -160,13 +164,28 @@ export function MapSearch({
         <input
           type="checkbox"
           className="mt-0.5"
+          checked={schuelerOnly}
+          onChange={(e) => onSchuelerOnlyChange(e.target.checked)}
+        />
+        <span>
+          Nur Schülerpraktikum – sucht gezielt nach Schul-/Betriebspraktika
+          für Schüler (Klassen ~8–10) und blendet Werkstudent/Intern aus.
+        </span>
+      </label>
+
+      <label className="mt-3 flex items-start gap-2.5 text-[13px] text-neutral-600">
+        <input
+          type="checkbox"
+          className="mt-0.5"
           checked={includeOsm}
+          disabled={schuelerOnly}
           onChange={(e) => onIncludeOsmChange(e.target.checked)}
         />
         <span>
           Alle Betriebe anzeigen – auch ohne freie Praktikumsstelle
           (Ausbildungsbetriebe der Arbeitsagentur + OpenStreetMap,
           Initiativbewerbung). Empfohlen.
+          {schuelerOnly ? " (bei „Nur Schülerpraktikum“ ausgeschaltet)" : ""}
         </span>
       </label>
 

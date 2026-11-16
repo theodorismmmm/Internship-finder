@@ -1,5 +1,6 @@
 import { estimateTravel, haversineKm } from "./geo";
 import { resolveBaPlace } from "./place";
+import { isSchuelerpraktikumOffer } from "./schuelerpraktikum";
 import { inferFieldsFromOffer, scoreOffer } from "./scoring";
 import type {
   CareerFieldId,
@@ -135,6 +136,8 @@ function toOffer(
     isInitiative: opts.isInitiative,
   });
 
+  const schueler = isSchuelerpraktikumOffer(rawTitle, description, professions);
+
   return {
     id: `${opts.isInitiative ? "ba-init" : "ba"}-${job.referenznummer || `${lat}-${lon}-${rawTitle}`}`,
     source: "ba",
@@ -150,6 +153,7 @@ function toOffer(
     professions,
     fieldHints,
     isInitiative: opts.isInitiative,
+    isSchuelerpraktikum: schueler,
     publishedAt: job.datumErsteVeroeffentlichung,
     score,
     travel: estimateTravel(distanceKm),
@@ -157,7 +161,23 @@ function toOffer(
 }
 
 /** Extra Suchwörter, damit Firmen wie Airbus (Intern / Working Student) nicht fehlen. */
-function buildInternshipQueries(searchTerms: string[]): string[] {
+function buildInternshipQueries(
+  searchTerms: string[],
+  schuelerOnly = false,
+): string[] {
+  if (schuelerOnly) {
+    const base = [
+      "Schülerpraktikum",
+      "Schulpraktikum",
+      "Betriebspraktikum",
+      "Ferienpraktikum",
+      "Schnupperpraktikum",
+      "Praktikum Schüler",
+      "Praktikum Schule",
+    ];
+    const fromFields = searchTerms.slice(0, 6).map((t) => `Schülerpraktikum ${t}`);
+    return Array.from(new Set([...base, ...fromFields]));
+  }
   const base = [
     "Praktikum",
     "Schülerpraktikum",
@@ -187,10 +207,18 @@ export async function searchBaInternships(params: {
   searchTerms: string[];
   selectedFields: CareerFieldId[];
   profile: StudentProfile | null;
+  schuelerOnly?: boolean;
 }): Promise<InternshipOffer[]> {
-  const { center, radiusKm, searchTerms, selectedFields, profile } = params;
+  const {
+    center,
+    radiusKm,
+    searchTerms,
+    selectedFields,
+    profile,
+    schuelerOnly = false,
+  } = params;
   const place = await resolveBaPlace(center);
-  const queries = buildInternshipQueries(searchTerms);
+  const queries = buildInternshipQueries(searchTerms, schuelerOnly);
   const jobMap = new Map<string, BaJob>();
   const searchRadius = Math.max(Math.round(radiusKm), 30);
 
@@ -254,6 +282,7 @@ export async function searchBaInternships(params: {
     });
     if (!offer) continue;
     if (offer.distanceKm > softRadius) continue;
+    if (schuelerOnly && !offer.isSchuelerpraktikum) continue;
     offers.push(offer);
   }
 
