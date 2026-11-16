@@ -31,20 +31,34 @@ function userAgent(): string {
   );
 }
 
-/** Mehrere kleine Queries – robuster als eine große. */
+/** Mehrere kleine Queries – robuster als eine große; möglichst viele echte Betriebe. */
 function buildQueries(lat: number, lon: number, radiusM: number): string[] {
-  const r = Math.min(Math.max(radiusM, 3000), 15000);
+  const r = Math.min(Math.max(radiusM, 5000), 25000);
   return [
-    `[out:json][timeout:12];node["office"](around:${r},${lat},${lon});out body 50;`,
-    `[out:json][timeout:12];node["craft"](around:${r},${lat},${lon});out body 40;`,
-    `[out:json][timeout:12];(
+    `[out:json][timeout:15];(
+  node["office"](around:${r},${lat},${lon});
+  way["office"](around:${r},${lat},${lon});
+);out center body 80;`,
+    `[out:json][timeout:15];(
+  node["craft"](around:${r},${lat},${lon});
+  way["craft"](around:${r},${lat},${lon});
+  node["industrial"](around:${r},${lat},${lon});
+  way["landuse"="industrial"](around:${r},${lat},${lon});
+);out center body 80;`,
+    `[out:json][timeout:15];(
   node["amenity"="hospital"](around:${r},${lat},${lon});
   node["amenity"="clinic"](around:${r},${lat},${lon});
   node["amenity"="school"](around:${r},${lat},${lon});
   node["amenity"="kindergarten"](around:${r},${lat},${lon});
+  node["amenity"="townhall"](around:${r},${lat},${lon});
+  node["amenity"="police"](around:${r},${lat},${lon});
+  node["amenity"="fire_station"](around:${r},${lat},${lon});
   node["shop"="car_repair"](around:${r},${lat},${lon});
   node["shop"="car"](around:${r},${lat},${lon});
-);out body 40;`,
+  node["tourism"="hotel"](around:${r},${lat},${lon});
+  node["building"="industrial"](around:${r},${lat},${lon});
+  way["building"="industrial"](around:${r},${lat},${lon});
+);out center body 80;`,
   ];
 }
 
@@ -145,7 +159,7 @@ export async function searchOsmCompanies(params: {
 }): Promise<InternshipOffer[]> {
   const { center, radiusKm, selectedFields, profile, existingCompanyKeys } =
     params;
-  const radiusM = Math.round(Math.min(Math.max(radiusKm, 5), 20) * 1000);
+  const radiusM = Math.round(Math.min(Math.max(radiusKm, 8), 40) * 1000);
   const queries = buildQueries(center.lat, center.lon, radiusM);
 
   const batches = await Promise.all(
@@ -180,7 +194,7 @@ export async function searchOsmCompanies(params: {
     seen.add(key);
 
     const distanceKm = haversineKm(center.lat, center.lon, lat, lon);
-    if (distanceKm > radiusKm + 0.5) continue;
+    if (distanceKm > radiusKm + 8) continue;
 
     const fieldHints = fieldHintsFromTags(tags, selectedFields);
     const title = `Initiativbewerbung: ${company}`;
@@ -235,7 +249,7 @@ export async function searchOsmCompanies(params: {
       travel: estimateTravel(distanceKm),
     });
 
-    if (offers.length >= 80) break;
+    if (offers.length >= 200) break;
   }
 
   return offers;

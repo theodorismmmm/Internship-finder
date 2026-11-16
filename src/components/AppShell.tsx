@@ -130,13 +130,15 @@ export function AppShell() {
       // 1) Offene Stellen
       let { ba: baOffers, meta: jobMeta } = await fetchJobsAt(center, usedRadius);
 
-      // Wenn leer: Radius automatisch vergrößern und nochmal versuchen
-      if (baOffers.length === 0 && usedRadius < 40) {
+      // Wenige/keine Treffer → Radius automatisch vergrößern
+      if (baOffers.length < 10 && usedRadius < 40) {
         usedRadius = Math.min(50, Math.max(usedRadius + 15, 30));
         setRadiusKm(usedRadius);
         const retry = await fetchJobsAt(center, usedRadius);
-        baOffers = retry.ba;
-        jobMeta = retry.meta;
+        if (retry.ba.length > baOffers.length) {
+          baOffers = retry.ba;
+          jobMeta = retry.meta;
+        }
       }
 
       setOffers(baOffers);
@@ -160,10 +162,16 @@ export function AppShell() {
         baOffers.map((o) => o.company),
       );
 
-      if (baOffers.length === 0 && companyOffers.length === 0 && usedRadius < 50) {
+      const total = baOffers.length + companyOffers.length;
+      if (total < 25 && usedRadius < 50) {
         usedRadius = 50;
         setRadiusKm(50);
-        companyOffers = await fetchCompaniesAt(center, 50, []);
+        const more = await fetchCompaniesAt(
+          center,
+          50,
+          [...baOffers, ...companyOffers].map((o) => o.company),
+        );
+        companyOffers = [...companyOffers, ...more];
       }
 
       if (companyOffers.length > 0) {
@@ -178,7 +186,7 @@ export function AppShell() {
               ...prev,
               osmCount: companyOffers.length,
               disclaimer:
-                "Offene Stellen + Ausbildungs-/Intern-Betriebe (BA) und Orte aus OpenStreetMap. Initiativ = ohne ausgeschriebenes Schülerpraktikum.",
+                "Möglichst alles im Umkreis: offene Stellen, Ausbildungs-/Intern-Betriebe (BA) und Orte aus OpenStreetMap. Initiativ = ohne ausgeschriebenes Schülerpraktikum.",
             }
           : prev,
       );

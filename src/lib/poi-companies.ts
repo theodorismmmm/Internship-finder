@@ -25,7 +25,7 @@ interface PhotonFeature {
 
 /**
  * Benannte Orte/Firmen in der Nähe über Photon (OSM) – echte POIs, keine Fantasie.
- * Filtert streng nach Umkreis, damit keine Treffer aus ganz Norddeutschland kommen.
+ * Viele Branchensuchen, damit möglichst alles in der Nähe auffindbar ist.
  */
 export async function searchNearbyPois(params: {
   center: MapCenter;
@@ -59,6 +59,31 @@ export async function searchNearbyPois(params: {
     "Bank",
     "Versicherung",
     "Behörde",
+    "Agentur",
+    "Verlag",
+    "Studio",
+    "Labor",
+    "Werkstatt",
+    "Bauunternehmen",
+    "Architektur",
+    "Ingenieurbüro",
+    "Pflegeheim",
+    "Apotheke",
+    "Zahnarzt",
+    "Tierarzt",
+    "Autohaus",
+    "Spedition",
+    "Logistik",
+    "IT",
+    "Software",
+    "Medien",
+    "Theater",
+    "Museum",
+    "Universität",
+    "Hochschule",
+    "Feuerwehr",
+    "Polizei",
+    "Stadtverwaltung",
   ];
 
   const features: PhotonFeature[] = [];
@@ -70,8 +95,9 @@ export async function searchNearbyPois(params: {
         url.searchParams.set("q", q);
         url.searchParams.set("lat", String(center.lat));
         url.searchParams.set("lon", String(center.lon));
-        url.searchParams.set("limit", "25");
+        url.searchParams.set("limit", "40");
         url.searchParams.set("lang", "de");
+        url.searchParams.set("location_bias_scale", "0.2");
         const res = await fetch(url.toString(), {
           headers: {
             Accept: "application/json",
@@ -92,14 +118,14 @@ export async function searchNearbyPois(params: {
 
   const offers: InternshipOffer[] = [];
   const seen = new Set<string>(existingCompanyKeys);
-  const softRadius = Math.max(radiusKm, 20);
+  const softRadius = Math.max(radiusKm, 25) + 5;
 
   for (const f of features) {
     const props = f.properties;
     const coords = f.geometry?.coordinates;
     if (!props?.name || !coords || coords.length < 2) continue;
-    const lon = coords[0];
-    const lat = coords[1];
+    const lon = coords[0] as number;
+    const lat = coords[1] as number;
 
     const distanceKm = haversineKm(center.lat, center.lon, lat, lon);
     if (distanceKm > softRadius) continue;
@@ -117,7 +143,7 @@ export async function searchNearbyPois(params: {
       props.osm_value === "residential" ||
       props.osm_value === "apartments" ||
       /allee$|straße$|strasse$|weg$|platz$/i.test(company) ||
-      /\bA\d{3}M\b|\bA\d{3}\b/.test(company) // Flugzeugtypen o.ä.
+      /\bA\d{3}M\b|\bA\d{3}\b/.test(company)
     ) {
       continue;
     }
@@ -169,7 +195,7 @@ export async function searchNearbyPois(params: {
       travel: estimateTravel(distanceKm),
     });
 
-    if (offers.length >= 100) break;
+    if (offers.length >= 220) break;
   }
 
   return offers;

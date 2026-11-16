@@ -162,14 +162,21 @@ function buildInternshipQueries(searchTerms: string[]): string[] {
     "Praktikum",
     "Schülerpraktikum",
     "Betriebspraktikum",
+    "Ferienpraktikum",
+    "Schnupperpraktikum",
     "Intern",
+    "Internship",
     "Werkstudent",
     "Working Student",
     "Praktikant",
+    "Trainee",
+    "Airbus",
+    "Luftfahrt",
   ];
-  const fromFields = searchTerms.slice(0, 4).flatMap((t) => [
+  const fromFields = searchTerms.slice(0, 6).flatMap((t) => [
     `Praktikum ${t}`,
     `Intern ${t}`,
+    t,
   ]);
   return Array.from(new Set([...base, ...fromFields]));
 }
@@ -189,7 +196,7 @@ export async function searchBaInternships(params: {
 
   await Promise.all(
     queries.map(async (was) => {
-      for (const page of [1, 2, 3]) {
+      for (const page of [1, 2, 3, 4]) {
         try {
           const jobs = await fetchBaPage({
             was,
@@ -213,28 +220,32 @@ export async function searchBaInternships(params: {
     }),
   );
 
-  // Fallback: leere Suche → trotzdem Stadt + Praktikum mit großem Umkreis
-  if (jobMap.size === 0) {
-    try {
-      const jobs = await fetchBaPage({
-        was: "Praktikum",
-        wo: place || "Bremen",
-        umkreis: 50,
-        size: 50,
-      });
-      for (const job of jobs) {
-        const key =
-          job.referenznummer ||
-          `${job.stellenangebotsTitel}-${job.firma}-${job.stellenlokationen?.[0]?.breite}`;
-        if (key && !jobMap.has(key)) jobMap.set(key, job);
+  // Fallback: breite Stadt-Suche, damit der Radius nie „leer“ wirkt
+  if (jobMap.size < 20) {
+    for (const was of ["Praktikum", "Intern", ""]) {
+      try {
+        const jobs = await fetchBaPage({
+          was,
+          wo: place || "Bremen",
+          umkreis: Math.max(searchRadius, 50),
+          size: 50,
+          page: 1,
+          angebotsart: "34",
+        });
+        for (const job of jobs) {
+          const key =
+            job.referenznummer ||
+            `${job.stellenangebotsTitel}-${job.firma}-${job.stellenlokationen?.[0]?.breite}`;
+          if (key && !jobMap.has(key)) jobMap.set(key, job);
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
     }
   }
 
   // Großzügig: lieber mehr echte Treffer zeigen als zu streng filtern
-  const softRadius = Math.max(radiusKm, 25) + 10;
+  const softRadius = Math.max(radiusKm, 25) + 20;
   const offers: InternshipOffer[] = [];
 
   for (const job of jobMap.values()) {
@@ -270,45 +281,58 @@ export async function searchBaTrainingCompanies(params: {
     { was: "Ausbildung", angebotsart: "4" },
     { was: "Azubi", angebotsart: "4" },
     { was: "Duales Studium", angebotsart: "4" },
+    { was: "", angebotsart: "4" },
     { was: "Intern", angebotsart: "34" },
     { was: "Werkstudent", angebotsart: "34" },
     { was: "Working Student", angebotsart: "34" },
     { was: "Intern", angebotsart: "1" },
     { was: "Werkstudent", angebotsart: "1" },
     { was: "Working Student", angebotsart: "1" },
+    { was: "Teilzeit", angebotsart: "1" },
     { was: "Luftfahrt", angebotsart: "34" },
     { was: "Luftfahrt", angebotsart: "4" },
+    { was: "Airbus", angebotsart: "1" },
+    { was: "Airbus", angebotsart: "4" },
+    { was: "Airbus", angebotsart: "34" },
+    { was: "Industrie", angebotsart: "4" },
+    { was: "Handwerk", angebotsart: "4" },
+    { was: "Pflege", angebotsart: "4" },
+    { was: "IT", angebotsart: "4" },
   ];
 
   await Promise.all(
     passes.map(async ({ was, angebotsart }) => {
-      try {
-        const jobs = await fetchBaPage({
-          was,
-          wo: place,
-          umkreis: searchRadius,
-          size: 50,
-          angebotsart,
-        });
-        for (const job of jobs) {
-          const company = (job.firma || "")
-            .toLowerCase()
-            .replace(/\s+/g, " ")
-            .trim();
-          if (!company || existingCompanyKeys.has(company)) continue;
-          const key =
-            job.referenznummer || `${company}-${job.stellenangebotsTitel}`;
-          if (!jobMap.has(key)) jobMap.set(key, job);
+      for (const page of [1, 2]) {
+        try {
+          const jobs = await fetchBaPage({
+            was,
+            wo: place,
+            umkreis: searchRadius,
+            size: 50,
+            page,
+            angebotsart,
+          });
+          for (const job of jobs) {
+            const company = (job.firma || "")
+              .toLowerCase()
+              .replace(/\s+/g, " ")
+              .trim();
+            if (!company || existingCompanyKeys.has(company)) continue;
+            const key =
+              job.referenznummer || `${company}-${job.stellenangebotsTitel}`;
+            if (!jobMap.has(key)) jobMap.set(key, job);
+          }
+          if (jobs.length < 50) break;
+        } catch {
+          break;
         }
-      } catch {
-        /* ignore */
       }
     }),
   );
 
   const offers: InternshipOffer[] = [];
   const seenCompanies = new Set<string>(existingCompanyKeys);
-  const softRadius = Math.max(radiusKm, 25) + 15;
+  const softRadius = Math.max(radiusKm, 25) + 25;
 
   for (const job of jobMap.values()) {
     const company = job.firma || "Unbekannter Betrieb";
@@ -326,7 +350,7 @@ export async function searchBaTrainingCompanies(params: {
     // Titel auf Firmenname normieren für die Initiativ-Liste
     offer.title = `Initiativpraktikum möglich: ${company}`;
     offers.push(offer);
-    if (offers.length >= 120) break;
+    if (offers.length >= 250) break;
   }
 
   return offers;
