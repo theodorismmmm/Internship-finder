@@ -19,10 +19,11 @@ import { MerklisteModal } from "./MerklisteModal";
 import { ProfileEditor } from "./ProfileEditor";
 import { ResultsPanel } from "./ResultsPanel";
 
+/** Start in Bremen (Airport-Stadt / Neuenland) – Airbus & viele Betriebe in der Nähe */
 const DEFAULT_CENTER: MapCenter = {
-  lat: 52.52,
-  lon: 13.405,
-  label: "Berlin, Deutschland",
+  lat: 53.0524,
+  lon: 8.7957,
+  label: "Bremen, Airport-Stadt, Deutschland",
 };
 
 export function AppShell() {
@@ -34,7 +35,7 @@ export function AppShell() {
   const activeProfile = manualProfile ?? profile;
   const [fields, setFields] = useState<CareerFieldId[]>([]);
   const [center, setCenter] = useState<MapCenter>(DEFAULT_CENTER);
-  const [radiusKm, setRadiusKm] = useState(15);
+  const [radiusKm, setRadiusKm] = useState(25);
   const [includeOsm, setIncludeOsm] = useState(true);
   const [offers, setOffers] = useState<InternshipOffer[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -80,66 +81,122 @@ export function AppShell() {
     setStoredProfile(next);
   }
 
-  async function runSearch() {
+  async function fetchJobsAt(
+    atCenter: MapCenter,
+    atRadius: number,
+  ): Promise<{ ba: InternshipOffer[]; meta: typeof meta }> {
+    const res = await fetch("/api/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        center: atCenter,
+        radiusKm: atRadius,
+        fields: selectedFields,
+        profile: activeProfile,
+        includeOsm: false,
+        enrichDescriptions: false,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Suche fehlgeschlagen");
+    return { ba: (data.offers || []) as InternshipOffer[], meta: data.meta || null };
+  }
+
+  async function fetchCompaniesAt(
+    atCenter: MapCenter,
+    atRadius: number,
+    exclude: string[],
+  ): Promise<InternshipOffer[]> {
+    const companyRes = await fetch("/api/companies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        center: atCenter,
+        radiusKm: atRadius,
+        fields: selectedFields,
+        profile: activeProfile,
+        excludeCompanies: exclude,
+      }),
+    });
+    const companyData = await companyRes.json();
+    return (companyData.offers || []) as InternshipOffer[];
+  }
+
+  async function runSearch(overrideRadius?: number) {
     setSearching(true);
     setSearchError(null);
+    let usedRadius = overrideRadius ?? radiusKm;
     try {
-      // 1) Offene Stellen zuerst (schnell)
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          center,
-          radiusKm,
-          fields: selectedFields,
-          profile: activeProfile,
-          includeOsm: false,
-          enrichDescriptions: false,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Suche fehlgeschlagen");
-      const baOffers = (data.offers || []) as InternshipOffer[];
+      // 1) Offene Stellen
+      let { ba: baOffers, meta: jobMeta } = await fetchJobsAt(center, usedRadius);
+
+      // Wenige/keine Treffer → Radius automatisch vergrößern
+      if (baOffers.length < 10 && usedRadius < 40) {
+        usedRadius = Math.min(50, Math.max(usedRadius + 15, 30));
+        setRadiusKm(usedRadius);
+        const retry = await fetchJobsAt(center, usedRadius);
+        if (retry.ba.length > baOffers.length) {
+          baOffers = retry.ba;
+          jobMeta = retry.meta;
+        }
+      }
+
       setOffers(baOffers);
-      setMeta(data.meta || null);
+      setMeta(jobMeta);
       setSelectedId(baOffers[0]?.id ?? null);
       setSearching(false);
 
-      // 2) Betriebe ohne Anzeige nachladen (wenn aktiviert)
-      if (!includeOsm) return;
+      // 2) Alle weiteren Betriebe (Ausbildungsbetriebe, Interns, OSM/POIs)
+      if (!includeOsm) {
+        if (baOffers.length === 0) {
+          setSearchError(
+            "Keine Treffer. Radius vergrößern oder „Alle Betriebe“ aktivieren.",
+          );
+        }
+        return;
+      }
 
-      const companyRes = await fetch("/api/companies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      let companyOffers = await fetchCompaniesAt(
+        center,
+        usedRadius,
+        baOffers.map((o) => o.company),
+      );
+
+      const total = baOffers.length + companyOffers.length;
+      if (total < 25 && usedRadius < 50) {
+        usedRadius = 50;
+        setRadiusKm(50);
+        const more = await fetchCompaniesAt(
           center,
-          radiusKm,
-          fields: selectedFields,
-          profile: activeProfile,
-          excludeCompanies: baOffers.map((o) => o.company),
-        }),
-      });
-      const companyData = await companyRes.json();
-      const osmOffers = (companyData.offers || []) as InternshipOffer[];
-      if (osmOffers.length > 0) {
+          50,
+          [...baOffers, ...companyOffers].map((o) => o.company),
+        );
+        companyOffers = [...companyOffers, ...more];
+      }
+
+      if (companyOffers.length > 0) {
         setOffers((prev) => {
           const ids = new Set(prev.map((p) => p.id));
-          return [...prev, ...osmOffers.filter((o) => !ids.has(o.id))];
+          return [...prev, ...companyOffers.filter((o) => !ids.has(o.id))];
         });
       }
       setMeta((prev) =>
         prev
           ? {
               ...prev,
-              osmCount: osmOffers.length,
-              osmError: companyData.error || null,
+              osmCount: companyOffers.length,
               disclaimer:
-                "Offene Stellen: Bundesagentur für Arbeit. Weitere Betriebe: OpenStreetMap (Initiativbewerbung).",
+                "Möglichst alles im Umkreis: offene Stellen, Ausbildungs-/Intern-Betriebe (BA) und Orte aus OpenStreetMap. Initiativ = ohne ausgeschriebenes Schülerpraktikum.",
             }
           : prev,
       );
-      if (!baOffers.length && osmOffers[0]) {
-        setSelectedId(osmOffers[0].id);
+      if (!baOffers.length && companyOffers[0]) {
+        setSelectedId(companyOffers[0].id);
+      }
+      if (baOffers.length === 0 && companyOffers.length === 0) {
+        setSearchError(
+          "Keine Treffer in diesem Umkreis. Anderen Ort wählen oder Radius erhöhen.",
+        );
       }
     } catch (err) {
       setSearchError(
@@ -191,6 +248,7 @@ export function AppShell() {
           onSelectOffer={setSelectedId}
           onSearch={() => void runSearch()}
           searching={searching}
+          autoSearchOnMount
         />
 
         <ResultsPanel

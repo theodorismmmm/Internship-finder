@@ -67,16 +67,16 @@ async function fetchBaPage(params: {
   wo: string;
   umkreis: number;
   size?: number;
-  /** 34 = Praktikum, 4 = Ausbildung */
-  angebotsart?: "34" | "4";
+  page?: number;
+  angebotsart?: "34" | "4" | "1";
 }): Promise<BaJob[]> {
   const url = new URL(`${BA_BASE}/pc/v6/jobs`);
-  url.searchParams.set("was", params.was);
+  if (params.was) url.searchParams.set("was", params.was);
   url.searchParams.set("wo", params.wo);
   url.searchParams.set("umkreis", String(Math.round(params.umkreis)));
   url.searchParams.set("angebotsart", params.angebotsart ?? "34");
-  url.searchParams.set("page", "1");
-  url.searchParams.set("size", String(params.size ?? 40));
+  url.searchParams.set("page", String(params.page ?? 1));
+  url.searchParams.set("size", String(params.size ?? 50));
   url.searchParams.set("zeitarbeit", "false");
 
   const res = await fetch(url.toString(), {
@@ -97,6 +97,90 @@ async function fetchBaPage(params: {
   return data.ergebnisliste ?? [];
 }
 
+function toOffer(
+  job: BaJob,
+  center: MapCenter,
+  selectedFields: CareerFieldId[],
+  profile: StudentProfile | null,
+  opts: { isInitiative: boolean; titlePrefix?: string },
+): InternshipOffer | null {
+  const loc = job.stellenlokationen?.[0];
+  const lat = loc?.breite;
+  const lon = loc?.laenge;
+  if (typeof lat !== "number" || typeof lon !== "number") return null;
+
+  const professions = Array.from(
+    new Set(
+      [job.hauptberuf, ...(job.alleBerufe ?? [])].filter(Boolean) as string[],
+    ),
+  );
+  const rawTitle = job.stellenangebotsTitel || "Praktikum";
+  const title = opts.titlePrefix
+    ? `${opts.titlePrefix}${job.firma || rawTitle}`
+    : rawTitle;
+  const description = opts.isInitiative
+    ? `Betrieb mit aktueller BA-Anzeige „${rawTitle}“. Kein explizites Schülerpraktikum – Initiativbewerbung kann möglich sein.`
+    : job.stellenangebotsBeschreibung || "";
+  const company = job.firma || "Unbekannter Betrieb";
+  const fieldHints = inferFieldsFromOffer(rawTitle, description, professions);
+  const distanceKm = haversineKm(center.lat, center.lon, lat, lon);
+  const score = scoreOffer({
+    title,
+    company,
+    description,
+    professions,
+    fieldHints,
+    selectedFields,
+    profile,
+    isInitiative: opts.isInitiative,
+  });
+
+  return {
+    id: `${opts.isInitiative ? "ba-init" : "ba"}-${job.referenznummer || `${lat}-${lon}-${rawTitle}`}`,
+    source: "ba",
+    title,
+    company,
+    description: description.slice(0, 2000),
+    locationLabel: locationLabel(loc),
+    lat,
+    lon,
+    distanceKm: Math.round(distanceKm * 10) / 10,
+    url: jobUrl(job),
+    referenceNumber: job.referenznummer,
+    professions,
+    fieldHints,
+    isInitiative: opts.isInitiative,
+    publishedAt: job.datumErsteVeroeffentlichung,
+    score,
+    travel: estimateTravel(distanceKm),
+  };
+}
+
+/** Extra Suchwörter, damit Firmen wie Airbus (Intern / Working Student) nicht fehlen. */
+function buildInternshipQueries(searchTerms: string[]): string[] {
+  const base = [
+    "Praktikum",
+    "Schülerpraktikum",
+    "Betriebspraktikum",
+    "Ferienpraktikum",
+    "Schnupperpraktikum",
+    "Intern",
+    "Internship",
+    "Werkstudent",
+    "Working Student",
+    "Praktikant",
+    "Trainee",
+    "Airbus",
+    "Luftfahrt",
+  ];
+  const fromFields = searchTerms.slice(0, 6).flatMap((t) => [
+    `Praktikum ${t}`,
+    `Intern ${t}`,
+    t,
+  ]);
+  return Array.from(new Set([...base, ...fromFields]));
+}
+
 export async function searchBaInternships(params: {
   center: MapCenter;
   radiusKm: number;
@@ -106,125 +190,79 @@ export async function searchBaInternships(params: {
 }): Promise<InternshipOffer[]> {
   const { center, radiusKm, searchTerms, selectedFields, profile } = params;
   const place = await resolveBaPlace(center);
-
-  const queries =
-    searchTerms.length > 0
-      ? Array.from(
-          new Set([
-            "Praktikum",
-            "Schülerpraktikum",
-            ...searchTerms.slice(0, 3).map((t) => `Praktikum ${t}`),
-          ]),
-        )
-      : ["Praktikum", "Schülerpraktikum", "Betriebspraktikum"];
-
+  const queries = buildInternshipQueries(searchTerms);
   const jobMap = new Map<string, BaJob>();
-
-  // Primär: aufgelöster Ort (z. B. Bremen statt Airport-Stadt…)
-  // Zusätzlich größerer Umkreis, falls der Ortsteil zu eng ist
-  const radii = Array.from(
-    new Set([Math.round(radiusKm), Math.min(50, Math.round(radiusKm) + 15)]),
-  );
+  const searchRadius = Math.max(Math.round(radiusKm), 30);
 
   await Promise.all(
-    queries.flatMap((was) =>
-      radii.map(async (umkreis) => {
+    queries.map(async (was) => {
+      for (const page of [1, 2, 3, 4]) {
         try {
-          const jobs = await fetchBaPage({ was, wo: place, umkreis });
+          const jobs = await fetchBaPage({
+            was,
+            wo: place,
+            umkreis: searchRadius,
+            size: 50,
+            page,
+            angebotsart: "34",
+          });
           for (const job of jobs) {
             const key =
               job.referenznummer ||
               `${job.stellenangebotsTitel}-${job.firma}-${job.stellenlokationen?.[0]?.breite}`;
             if (key && !jobMap.has(key)) jobMap.set(key, job);
           }
+          if (jobs.length < 50) break;
         } catch {
-          // Einzelne Query-Fehler nicht die ganze Suche killen
+          break;
         }
-      }),
-    ),
+      }
+    }),
   );
 
-  // Fallback: wenn nichts kam, nochmal nur mit "Praktikum" + Stadt
-  if (jobMap.size === 0 && place) {
-    try {
-      const jobs = await fetchBaPage({
-        was: "Praktikum",
-        wo: place,
-        umkreis: Math.max(radiusKm, 25),
-        size: 50,
-      });
-      for (const job of jobs) {
-        const key =
-          job.referenznummer ||
-          `${job.stellenangebotsTitel}-${job.firma}-${job.stellenlokationen?.[0]?.breite}`;
-        if (key && !jobMap.has(key)) jobMap.set(key, job);
+  // Fallback: breite Stadt-Suche, damit der Radius nie „leer“ wirkt
+  if (jobMap.size < 20) {
+    for (const was of ["Praktikum", "Intern", ""]) {
+      try {
+        const jobs = await fetchBaPage({
+          was,
+          wo: place || "Bremen",
+          umkreis: Math.max(searchRadius, 50),
+          size: 50,
+          page: 1,
+          angebotsart: "34",
+        });
+        for (const job of jobs) {
+          const key =
+            job.referenznummer ||
+            `${job.stellenangebotsTitel}-${job.firma}-${job.stellenlokationen?.[0]?.breite}`;
+          if (key && !jobMap.has(key)) jobMap.set(key, job);
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
     }
   }
 
-  const jobs = Array.from(jobMap.values());
+  // Großzügig: lieber mehr echte Treffer zeigen als zu streng filtern
+  const softRadius = Math.max(radiusKm, 25) + 20;
   const offers: InternshipOffer[] = [];
-  const softRadius = Math.max(radiusKm, 5) + 2;
 
-  for (const job of jobs) {
-    const loc = job.stellenlokationen?.[0];
-    const lat = loc?.breite;
-    const lon = loc?.laenge;
-    if (typeof lat !== "number" || typeof lon !== "number") continue;
-
-    const distanceKm = haversineKm(center.lat, center.lon, lat, lon);
-    // BA-Entfernungsangabe kann zum Stadtzentrum gehören – eigene Haversine bevorzugen
-    if (distanceKm > softRadius) continue;
-
-    const professions = Array.from(
-      new Set(
-        [job.hauptberuf, ...(job.alleBerufe ?? [])].filter(Boolean) as string[],
-      ),
-    );
-    const title = job.stellenangebotsTitel || "Praktikum";
-    const description = job.stellenangebotsBeschreibung || "";
-    const company = job.firma || "Unbekannter Betrieb";
-    const fieldHints = inferFieldsFromOffer(title, description, professions);
-    const score = scoreOffer({
-      title,
-      company,
-      description,
-      professions,
-      fieldHints,
-      selectedFields,
-      profile,
+  for (const job of jobMap.values()) {
+    const offer = toOffer(job, center, selectedFields, profile, {
       isInitiative: false,
     });
-
-    offers.push({
-      id: `ba-${job.referenznummer || `${lat}-${lon}-${title}`}`,
-      source: "ba",
-      title,
-      company,
-      description: description.slice(0, 2000),
-      locationLabel: locationLabel(loc),
-      lat,
-      lon,
-      distanceKm: Math.round(distanceKm * 10) / 10,
-      url: jobUrl(job),
-      referenceNumber: job.referenznummer,
-      professions,
-      fieldHints,
-      isInitiative: false,
-      publishedAt: job.datumErsteVeroeffentlichung,
-      score,
-      travel: estimateTravel(distanceKm),
-    });
+    if (!offer) continue;
+    if (offer.distanceKm > softRadius) continue;
+    offers.push(offer);
   }
 
   return offers;
 }
 
 /**
- * Ausbildungsbetriebe aus der BA (echte Anzeigen, Art Ausbildung).
- * Dienen als zusätzliche Firmenliste für Initiativ-Schülerpraktika.
+ * Weitere echte BA-Treffer als Betriebe: Ausbildung + Intern/Werkstudent (Arbeit),
+ * damit große Arbeitgeber wie Airbus sichtbar werden.
  */
 export async function searchBaTrainingCompanies(params: {
   center: MapCenter;
@@ -237,95 +275,82 @@ export async function searchBaTrainingCompanies(params: {
     params;
   const place = await resolveBaPlace(center);
   const jobMap = new Map<string, BaJob>();
+  const searchRadius = Math.max(radiusKm, 25);
 
-  const queries = ["Ausbildung", "Azubi", "Duales Studium"];
+  const passes: Array<{ was: string; angebotsart: "34" | "4" | "1" }> = [
+    { was: "Ausbildung", angebotsart: "4" },
+    { was: "Azubi", angebotsart: "4" },
+    { was: "Duales Studium", angebotsart: "4" },
+    { was: "", angebotsart: "4" },
+    { was: "Intern", angebotsart: "34" },
+    { was: "Werkstudent", angebotsart: "34" },
+    { was: "Working Student", angebotsart: "34" },
+    { was: "Intern", angebotsart: "1" },
+    { was: "Werkstudent", angebotsart: "1" },
+    { was: "Working Student", angebotsart: "1" },
+    { was: "Teilzeit", angebotsart: "1" },
+    { was: "Luftfahrt", angebotsart: "34" },
+    { was: "Luftfahrt", angebotsart: "4" },
+    { was: "Airbus", angebotsart: "1" },
+    { was: "Airbus", angebotsart: "4" },
+    { was: "Airbus", angebotsart: "34" },
+    { was: "Industrie", angebotsart: "4" },
+    { was: "Handwerk", angebotsart: "4" },
+    { was: "Pflege", angebotsart: "4" },
+    { was: "IT", angebotsart: "4" },
+  ];
+
   await Promise.all(
-    queries.map(async (was) => {
-      try {
-        const jobs = await fetchBaPage({
-          was,
-          wo: place,
-          umkreis: Math.max(radiusKm, 15),
-          size: 40,
-          angebotsart: "4",
-        });
-        for (const job of jobs) {
-          const company = (job.firma || "").toLowerCase().replace(/\s+/g, " ").trim();
-          if (!company || existingCompanyKeys.has(company)) continue;
-          const key = job.referenznummer || `${company}-${job.stellenangebotsTitel}`;
-          if (!jobMap.has(key)) jobMap.set(key, job);
+    passes.map(async ({ was, angebotsart }) => {
+      for (const page of [1, 2]) {
+        try {
+          const jobs = await fetchBaPage({
+            was,
+            wo: place,
+            umkreis: searchRadius,
+            size: 50,
+            page,
+            angebotsart,
+          });
+          for (const job of jobs) {
+            const company = (job.firma || "")
+              .toLowerCase()
+              .replace(/\s+/g, " ")
+              .trim();
+            if (!company || existingCompanyKeys.has(company)) continue;
+            const key =
+              job.referenznummer || `${company}-${job.stellenangebotsTitel}`;
+            if (!jobMap.has(key)) jobMap.set(key, job);
+          }
+          if (jobs.length < 50) break;
+        } catch {
+          break;
         }
-      } catch {
-        /* ignore */
       }
     }),
   );
 
   const offers: InternshipOffer[] = [];
   const seenCompanies = new Set<string>(existingCompanyKeys);
-  const softRadius = Math.max(radiusKm, 8) + 3;
+  const softRadius = Math.max(radiusKm, 25) + 25;
 
   for (const job of jobMap.values()) {
-    const loc = job.stellenlokationen?.[0];
-    const lat = loc?.breite;
-    const lon = loc?.laenge;
-    if (typeof lat !== "number" || typeof lon !== "number") continue;
     const company = job.firma || "Unbekannter Betrieb";
     const ckey = company.toLowerCase().replace(/\s+/g, " ").trim();
     if (seenCompanies.has(ckey)) continue;
+
+    const offer = toOffer(job, center, selectedFields, profile, {
+      isInitiative: true,
+      titlePrefix: "Initiativpraktikum möglich: ",
+    });
+    if (!offer) continue;
+    if (offer.distanceKm > softRadius) continue;
+
     seenCompanies.add(ckey);
-
-    const distanceKm = haversineKm(center.lat, center.lon, lat, lon);
-    if (distanceKm > softRadius) continue;
-
-    const professions = Array.from(
-      new Set(
-        [job.hauptberuf, ...(job.alleBerufe ?? [])].filter(Boolean) as string[],
-      ),
-    );
-    const title = `Initiativpraktikum möglich: ${company}`;
-    const description =
-      `Ausbildungsbetrieb laut Bundesagentur für Arbeit ` +
-      `(Anzeige: „${job.stellenangebotsTitel || "Ausbildung"}“). ` +
-      `Kein Schülerpraktikum ausgeschrieben – Initiativbewerbung um ein Praktikum kann möglich sein.`;
-
-    const fieldHints = inferFieldsFromOffer(
-      job.stellenangebotsTitel || "",
-      description,
-      professions,
-    );
-    const score = scoreOffer({
-      title,
-      company,
-      description,
-      professions,
-      fieldHints,
-      selectedFields,
-      profile,
-      isInitiative: true,
-    });
-
-    offers.push({
-      id: `ba-ausb-${job.referenznummer || `${lat}-${lon}-${company}`}`,
-      source: "ba",
-      title,
-      company,
-      description,
-      locationLabel: locationLabel(loc),
-      lat,
-      lon,
-      distanceKm: Math.round(distanceKm * 10) / 10,
-      url: jobUrl(job),
-      referenceNumber: job.referenznummer,
-      professions,
-      fieldHints,
-      isInitiative: true,
-      publishedAt: job.datumErsteVeroeffentlichung,
-      score,
-      travel: estimateTravel(distanceKm),
-    });
-
-    if (offers.length >= 50) break;
+    // Titel auf Firmenname normieren für die Initiativ-Liste
+    offer.title = `Initiativpraktikum möglich: ${company}`;
+    offers.push(offer);
+    if (offers.length >= 250) break;
   }
 
   return offers;
