@@ -79,6 +79,9 @@ export interface InternshipOffer {
 
 export type SortKey = "match" | "difficulty" | "distance";
 
+/** Stellen = offene Anzeigen · Firmen = Betriebe allgemein · Beides = kombiniert */
+export type SearchMode = "stellen" | "firmen" | "beides";
+
 export interface SearchParams {
   center: MapCenter;
   radiusKm: number;
@@ -86,4 +89,5 @@ export interface SearchParams {
   profile: StudentProfile | null;
   includeOsm: boolean;
   schuelerOnly?: boolean;
+  searchMode?: SearchMode;
 }

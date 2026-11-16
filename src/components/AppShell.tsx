@@ -8,6 +8,7 @@ import type {
   CareerFieldId,
   InternshipOffer,
   MapCenter,
+  SearchMode,
   StudentProfile,
 } from "@/lib/types";
 import { CoverLetterModal } from "./CoverLetterModal";
@@ -36,7 +37,7 @@ export function AppShell() {
   const [fields, setFields] = useState<CareerFieldId[]>([]);
   const [center, setCenter] = useState<MapCenter>(DEFAULT_CENTER);
   const [radiusKm, setRadiusKm] = useState(25);
-  const [includeOsm, setIncludeOsm] = useState(true);
+  const [searchMode, setSearchMode] = useState<SearchMode>("beides");
   const [schuelerOnly, setSchuelerOnly] = useState(false);
   const [offers, setOffers] = useState<InternshipOffer[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -124,23 +125,50 @@ export function AppShell() {
     return (companyData.offers || []) as InternshipOffer[];
   }
 
+  function handleSearchModeChange(mode: SearchMode) {
+    setSearchMode(mode);
+    if (mode === "firmen" && schuelerOnly) setSchuelerOnly(false);
+  }
+
+  function handleSchuelerOnlyChange(value: boolean) {
+    setSchuelerOnly(value);
+    if (value && searchMode === "firmen") setSearchMode("stellen");
+  }
+
   async function runSearch(overrideRadius?: number) {
     setSearching(true);
     setSearchError(null);
     let usedRadius = overrideRadius ?? radiusKm;
-    try {
-      // 1) Offene Stellen
-      let { ba: baOffers, meta: jobMeta } = await fetchJobsAt(center, usedRadius);
+    const wantJobs = searchMode !== "firmen" || schuelerOnly;
+    const wantCompanies = searchMode !== "stellen" && !schuelerOnly;
 
-      // Wenige/keine Treffer → Radius automatisch vergrößern
-      if (baOffers.length < 10 && usedRadius < 40) {
-        usedRadius = Math.min(50, Math.max(usedRadius + 15, 30));
-        setRadiusKm(usedRadius);
-        const retry = await fetchJobsAt(center, usedRadius);
-        if (retry.ba.length > baOffers.length) {
-          baOffers = retry.ba;
-          jobMeta = retry.meta;
+    try {
+      let baOffers: InternshipOffer[] = [];
+      let jobMeta: typeof meta = null;
+
+      if (wantJobs) {
+        const first = await fetchJobsAt(center, usedRadius);
+        baOffers = first.ba;
+        jobMeta = first.meta;
+
+        if (baOffers.length < 10 && usedRadius < 40) {
+          usedRadius = Math.min(50, Math.max(usedRadius + 15, 30));
+          setRadiusKm(usedRadius);
+          const retry = await fetchJobsAt(center, usedRadius);
+          if (retry.ba.length > baOffers.length) {
+            baOffers = retry.ba;
+            jobMeta = retry.meta;
+          }
         }
+      } else {
+        jobMeta = {
+          baCount: 0,
+          osmCount: 0,
+          osmError: null,
+          searchPlace: center.label,
+          disclaimer:
+            "Firmensuche: Betriebe aus BA (Ausbildung/Intern) und OpenStreetMap – Initiativbewerbung möglich.",
+        };
       }
 
       setOffers(baOffers);
@@ -148,14 +176,12 @@ export function AppShell() {
       setSelectedId(baOffers[0]?.id ?? null);
       setSearching(false);
 
-      // 2) Alle weiteren Betriebe (Ausbildungsbetriebe, Interns, OSM/POIs)
-      // Bei „Nur Schülerpraktikum“ keine Initiativ-/OSM-Betriebe nachladen
-      if (!includeOsm || schuelerOnly) {
+      if (!wantCompanies) {
         if (baOffers.length === 0) {
           setSearchError(
             schuelerOnly
               ? "Keine Schülerpraktika in diesem Umkreis. Radius vergrößern oder Filter ausschalten."
-              : "Keine Treffer. Radius vergrößern oder „Alle Betriebe“ aktivieren.",
+              : "Keine Stellen in diesem Umkreis. Radius erhöhen oder „Stellen + Firmen“ / „Nur Firmen“ wählen.",
           );
         }
         return;
@@ -189,9 +215,12 @@ export function AppShell() {
         prev
           ? {
               ...prev,
+              baCount: baOffers.length,
               osmCount: companyOffers.length,
               disclaimer:
-                "Möglichst alles im Umkreis: offene Stellen, Ausbildungs-/Intern-Betriebe (BA) und Orte aus OpenStreetMap. Initiativ = ohne ausgeschriebenes Schülerpraktikum.",
+                searchMode === "firmen"
+                  ? "Nur Firmen: Ausbildungs-/Intern-Betriebe (BA) und Orte aus OpenStreetMap. Initiativbewerbung möglich."
+                  : "Stellen und Firmen: offene Anzeigen plus Betriebe ohne Anzeige (Initiativ).",
             }
           : prev,
       );
@@ -236,7 +265,8 @@ export function AppShell() {
             PraktikumsRadar
           </h1>
           <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-neutral-500">
-            Ort wählen, suchen, fertig. Lebenslauf und Interessen sind optional.
+            Ort wählen, Stellen oder Firmen suchen – fertig. Lebenslauf und
+            Interessen sind optional.
           </p>
         </section>
 
@@ -246,12 +276,12 @@ export function AppShell() {
           radiusKm={radiusKm}
           offers={offers}
           selectedId={selectedId}
-          includeOsm={includeOsm}
+          searchMode={searchMode}
           schuelerOnly={schuelerOnly}
           onCenterChange={setCenter}
           onRadiusChange={setRadiusKm}
-          onIncludeOsmChange={setIncludeOsm}
-          onSchuelerOnlyChange={setSchuelerOnly}
+          onSearchModeChange={handleSearchModeChange}
+          onSchuelerOnlyChange={handleSchuelerOnlyChange}
           onSelectOffer={setSelectedId}
           onSearch={() => void runSearch()}
           searching={searching}
@@ -265,6 +295,7 @@ export function AppShell() {
           meta={meta}
           error={searchError}
           defaultSchuelerOnly={schuelerOnly}
+          defaultSearchMode={searchMode}
           onSelect={setSelectedId}
           onToggleBookmark={toggleBookmark}
           onCoverLetter={openCoverLetter}

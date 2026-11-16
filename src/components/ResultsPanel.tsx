@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { isSchuelerpraktikumOffer } from "@/lib/schuelerpraktikum";
 import { sortOffers } from "@/lib/scoring";
-import type { DifficultyLevel, InternshipOffer, SortKey } from "@/lib/types";
+import type {
+  DifficultyLevel,
+  InternshipOffer,
+  SearchMode,
+  SortKey,
+} from "@/lib/types";
 import { ResultCard } from "./ResultCard";
 
 interface ResultsPanelProps {
@@ -20,6 +25,7 @@ interface ResultsPanelProps {
   } | null;
   error: string | null;
   defaultSchuelerOnly?: boolean;
+  defaultSearchMode?: SearchMode;
   onSelect: (id: string) => void;
   onToggleBookmark: (offer: InternshipOffer) => void;
   onCoverLetter: (offer: InternshipOffer) => void;
@@ -37,6 +43,7 @@ export function ResultsPanel({
   meta,
   error,
   defaultSchuelerOnly = false,
+  defaultSearchMode = "beides",
   onSelect,
   onToggleBookmark,
   onCoverLetter,
@@ -46,9 +53,10 @@ export function ResultsPanel({
   const [difficultyFilter, setDifficultyFilter] = useState<
     DifficultyLevel | "alle"
   >("alle");
-  const [sourceFilter, setSourceFilter] = useState<"alle" | "ba" | "osm">(
-    "alle",
-  );
+  /** stellen = offene Anzeigen · firmen = Initiativ (BA-Ausbildung + OSM) */
+  const [sourceFilter, setSourceFilter] = useState<
+    "alle" | "stellen" | "firmen"
+  >("alle");
   const [artFilter, setArtFilter] = useState<"alle" | "schueler" | "andere">(
     defaultSchuelerOnly ? "schueler" : "alle",
   );
@@ -58,13 +66,22 @@ export function ResultsPanel({
     if (defaultSchuelerOnly) setArtFilter("schueler");
   }, [defaultSchuelerOnly]);
 
+  useEffect(() => {
+    if (defaultSearchMode === "firmen") setSourceFilter("firmen");
+    else if (defaultSearchMode === "stellen") setSourceFilter("stellen");
+    else setSourceFilter("alle");
+  }, [defaultSearchMode]);
+
   const filtered = useMemo(() => {
     let list = offers.filter((o) => o.score.matchPercent >= minMatch);
     if (difficultyFilter !== "alle") {
       list = list.filter((o) => o.score.difficulty === difficultyFilter);
     }
-    if (sourceFilter !== "alle") {
-      list = list.filter((o) => o.source === sourceFilter);
+    if (sourceFilter === "stellen") {
+      list = list.filter((o) => !o.isInitiative);
+    } else if (sourceFilter === "firmen") {
+      // BA-Ausbildungsbetriebe (source ba + initiative) und OSM/POIs
+      list = list.filter((o) => o.isInitiative || o.source === "osm");
     }
     if (artFilter === "schueler") {
       list = list.filter((o) => offerIsSchueler(o));
@@ -162,13 +179,15 @@ export function ResultsPanel({
           <select
             value={sourceFilter}
             onChange={(e) =>
-              setSourceFilter(e.target.value as "alle" | "ba" | "osm")
+              setSourceFilter(
+                e.target.value as "alle" | "stellen" | "firmen",
+              )
             }
             className="border-0 border-b border-neutral-200 bg-transparent py-1.5 text-[14px] outline-none focus:border-neutral-950"
           >
-            <option value="alle">Alle (Stellen + Betriebe)</option>
-            <option value="ba">Nur offene Stellen (BA)</option>
-            <option value="osm">Nur Betriebe ohne Anzeige</option>
+            <option value="alle">Alle (Stellen + Firmen)</option>
+            <option value="stellen">Nur offene Stellen</option>
+            <option value="firmen">Nur Firmen (inkl. BA-Betriebe)</option>
           </select>
         </label>
         <label className="text-[12px]">
